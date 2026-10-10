@@ -258,6 +258,7 @@ export function App() {
         onUpdatePortfolio={handleUpdatePortfolio}
         previewMode={previewMode}
         onChangePreviewMode={setPreviewMode}
+        onOpenResume={() => setIsResumeOpen(true)}
       />
 
       {/* Layer B: Professional ATS Resume Studio & Preview Modal */}

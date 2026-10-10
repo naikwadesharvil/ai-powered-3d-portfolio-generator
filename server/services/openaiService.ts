@@ -10,6 +10,7 @@ import {
   ChatInputSchema,
 } from '../schemas/portfolioSchema.js';
 import { z } from 'zod';
+import { buildDisciplinePromptFragment } from '../../src/config/disciplines.ts';
 
 export class OpenAiService {
   private static client: OpenAI | null = null;
@@ -47,28 +48,12 @@ export class OpenAiService {
     const branch = input.branch || input.discipline || 'cs_it';
     const customBranch = input.customBranchName ? ` (${input.customBranchName})` : '';
 
+    const disciplineFragment = buildDisciplinePromptFragment(branch, input.customBranchName);
+
     const systemPrompt = `You are a world-class portfolio designer, engineering talent strategist, and multi-disciplinary career advisor.
 Your task is to structure and synthesize professional portfolio content for a user based strictly on their educational discipline, verified details, and target role.
 
-IMPORTANT MULTI-DISCIPLINARY GUIDELINES:
-- Adapt strictly to the user's discipline and terminology:
-  * Computer Science / IT / AI / ML: Distributed systems, models, algorithms, clean architecture, DevOps.
-  * Mechanical: 3D CAD (SolidWorks, CATIA, AutoCAD), FEA stress analysis (ANSYS), thermal engineering, GD&T, manufacturing tooling, physical mechanical prototypes.
-  * Mechatronics & Robotics: Autonomous robotics (ROS), embedded systems (C++, microcontrollers), PLC/SCADA industrial automation, sensor fusion, electromechanical actuators.
-  * Electrical & Electronics: Circuit design, PCB layout (Altium, KiCAD), power systems, control systems, MATLAB/Simulink, lab testing instrumentation.
-  * Civil Engineering: Structural analysis (ETABS, STAAD.Pro), BIM (Revit), AutoCAD Civil 3D drafting, surveying (Total Station, GIS), construction scheduling, concrete/steel building codes.
-  * Chemical: Process simulation (Aspen Plus), chemical plant design, reaction kinetics, heat/mass transfer, HAZOP safety.
-  * Automobile: Vehicle dynamics, electric vehicle (EV) powertrain, battery management systems (BMS), suspension kinematics, CFD aerodynamics.
-  * Aerospace: Aerodynamics, CFD (Fluent), flight dynamics, propulsion, composite materials, aircraft structures.
-  * Sciences & Maths: Scientific research, mathematical modeling, numerical computing, experimental data.
-  * Diploma & Polytechnic: Practical technical drafting, workshop fabrication, CNC machining, machinery maintenance, quality inspection.
-  * Custom / Other: Adapt rigorously to the user's specific profession.
-
-ROLE DEFINITIONS:
-- student: Emphasize foundational education, coursework, academic labs, capstone projects, and eagerness to build real-world physical or digital systems.
-- job_seeker: Emphasize ATS-optimized technical summaries, core tools/standards, targeted job title, and verified practical capability.
-- professional: Emphasize systems architecture, project leadership, production/site metrics, standards compliance, and enterprise/industry scale.
-- freelancer: Emphasize service offerings, end-to-end deliverables, client communication, and turnaround speed.
+${disciplineFragment}
 
 CRITICAL ANTI-HALLUCINATION & FACT PRESERVATION RULES:
 1. NEVER invent facts, fake degrees, institutions, unverified employers, or fabricate numbers.

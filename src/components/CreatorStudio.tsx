@@ -18,6 +18,7 @@ import {
   AlertCircle,
   ArrowUp,
   ArrowDown,
+  ArrowRight,
   Eye,
   EyeOff,
   RefreshCw,
@@ -25,13 +26,14 @@ import {
   Cpu,
   Plus,
   Trash2,
-  Edit3,
   Lightbulb,
   Briefcase,
   GraduationCap,
   Wrench,
   Compass,
   Award,
+  FileText,
+  Copy,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import JSZip from 'jszip';
@@ -47,13 +49,15 @@ import type {
   EducationItem,
   ExperienceItem,
 } from '../types/portfolio';
+import type { Persona } from '../types/portfolioSchema';
 import { AiApiClient, type ServerHealth, type AiRecommendationsResult } from '../services/aiApiClient.ts';
 import { THEME_CONFIGS } from '../data/themeConfig';
 import {
-  ALL_DISCIPLINE_OPTIONS,
-  getDisciplinePreset,
-  type DisciplinePreset,
-} from '../data/disciplinePresets.ts';
+  getDisciplineConfig,
+  type DisciplineConfig,
+} from '../config/disciplines.ts';
+
+export type StepperStep = 'details' | 'generate' | 'customize' | 'download_publish';
 
 interface CreatorStudioProps {
   isOpen: boolean;
@@ -62,6 +66,7 @@ interface CreatorStudioProps {
   onUpdatePortfolio: (updated: PortfolioData) => void;
   previewMode: 'desktop' | 'tablet' | 'mobile';
   onChangePreviewMode: (mode: 'desktop' | 'tablet' | 'mobile') => void;
+  onOpenResume?: () => void;
 }
 
 export const CreatorStudio: React.FC<CreatorStudioProps> = ({
@@ -71,21 +76,22 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
   onUpdatePortfolio,
   previewMode,
   onChangePreviewMode,
+  onOpenResume,
 }) => {
-  // Navigation: Enter Details -> Generate Portfolio -> Customize & Co-Pilot -> Download or Publish
-  const [activeTab, setActiveTab] = useState<'details' | 'autopilot' | 'sections' | 'chat' | 'theme' | 'export'>('details');
+  // 4-Step Stepper Flow: Details -> Generate -> Customize -> Download/Publish
+  const [currentStep, setCurrentStep] = useState<StepperStep>('details');
   const [history, setHistory] = useState<PortfolioData[]>([portfolio]);
   const [future, setFuture] = useState<PortfolioData[]>([]);
 
   // Server & Model Status
   const [serverHealth, setServerHealth] = useState<ServerHealth | null>(null);
 
-  // Multi-Discipline State
-  const [selectedBranch, setSelectedBranch] = useState<EducationBranch>(portfolio.branch || 'cs_it');
+  // Discipline & Free-Text State
+  const [selectedBranch, setSelectedBranch] = useState<string>(portfolio.branch || 'cs_it');
   const [customBranchName, setCustomBranchName] = useState<string>(portfolio.branchName || '');
 
-  // Computed Discipline Preset
-  const activeDiscipline: DisciplinePreset = getDisciplinePreset(selectedBranch, customBranchName);
+  // Computed Discipline Config from config/disciplines.ts
+  const activeDiscipline: DisciplineConfig = getDisciplineConfig(selectedBranch, customBranchName);
 
   // Personal Info State
   const [autopilotName, setAutopilotName] = useState(portfolio.name);
@@ -94,15 +100,15 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
   const [userLocation, setUserLocation] = useState(portfolio.location || '');
   const [userEmail, setUserEmail] = useState(portfolio.email || '');
 
-  // Sub-sections in Details tab
-  const [detailsSubTab, setDetailsSubTab] = useState<'branch_role' | 'skills' | 'projects' | 'education' | 'experience'>('branch_role');
+  // Sub-tabs for Step 1 (Details) and Step 3 (Customize)
+  const [detailsSubTab, setDetailsSubTab] = useState<'persona_discipline' | 'skills' | 'projects' | 'education' | 'experience'>('persona_discipline');
+  const [customizeSubTab, setCustomizeSubTab] = useState<'sections' | 'rewriter' | 'themes' | 'chat'>('sections');
 
   // Interactive Skills State
   const [skillsList, setSkillsList] = useState<TechSkill[]>(portfolio.skills || []);
   const [newSkillName, setNewSkillName] = useState('');
-  const newSkillCategory = 'Core Competency';
 
-  // Interactive Projects State (Verified user projects)
+  // Interactive Projects State
   const [projectsList, setProjectsList] = useState<ProjectItem[]>(portfolio.projects || []);
   const [isAddingProject, setIsAddingProject] = useState(false);
   const [newProjTitle, setNewProjTitle] = useState('');
@@ -126,8 +132,9 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
   const [newExpPeriod, setNewExpPeriod] = useState('');
   const [newExpPoints, setNewExpPoints] = useState('');
 
-  // Generation Status State
+  // Generation Status & Progress State
   const [isGenerating, setIsGenerating] = useState(false);
+  const [streamProgress, setStreamProgress] = useState(0);
   const [generationStep, setGenerationStep] = useState<string>('');
   const [generationMeta, setGenerationMeta] = useState<{
     liveAi: boolean;
@@ -145,7 +152,7 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
   >([
     {
       sender: 'assistant',
-      text: `Hello! I'm your AI Portfolio Co-Pilot. I can help tailor your 3D portfolio for your discipline (${activeDiscipline.label}), rewrite bios, prioritize capstone projects, or adjust visual themes.`,
+      text: `Hello! I'm your AI Portfolio Co-Pilot. I can help tailor your 3D portfolio for ${activeDiscipline.label}, rewrite bios, prioritize capstone projects, or adjust visual themes.`,
       timestamp: 'Now',
     },
   ]);
@@ -172,7 +179,7 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
   const [isFetchingRecs, setIsFetchingRecs] = useState(false);
   const [recommendations, setRecommendations] = useState<AiRecommendationsResult | null>(null);
 
-  // Public Link State
+  // Public Link & ZIP State
   const [copiedLink, setCopiedLink] = useState(false);
   const [exportingZip, setExportingZip] = useState(false);
 
@@ -187,20 +194,128 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
 
   if (!isOpen) return null;
 
-  // Run AI Autopilot Generation
+  // Handle Persona Selection (Changes Section Emphasis and Visibility)
+  const handleSelectPersona = (newPersona: Persona) => {
+    setAutopilotRole(newPersona as UserRole);
+    const emphasis = activeDiscipline.personaSectionEmphasis[newPersona] || [
+      'hero', 'welcome', 'about', 'education', 'projects', 'skills', 'contact'
+    ];
+
+    const updatedVisibility = { ...portfolio.sectionVisibility };
+    if (newPersona === 'student') {
+      // Students lead with education and projects
+      updatedVisibility.education = true;
+      updatedVisibility.projects = true;
+      updatedVisibility.skills = true;
+      updatedVisibility.experience = false;
+      updatedVisibility.services = false;
+      updatedVisibility.testimonials = false;
+      updatedVisibility.certifications = true;
+      updatedVisibility.publications = true;
+    } else if (newPersona === 'job_seeker') {
+      // Job seekers lead with skills, projects, and verified experience
+      updatedVisibility.skills = true;
+      updatedVisibility.projects = true;
+      updatedVisibility.experience = true;
+      updatedVisibility.education = true;
+      updatedVisibility.services = false;
+      updatedVisibility.testimonials = false;
+    } else if (newPersona === 'professional') {
+      // Working professionals lead with experience, architecture, and track record
+      updatedVisibility.experience = true;
+      updatedVisibility.projects = true;
+      updatedVisibility.skills = true;
+      updatedVisibility.education = true;
+      updatedVisibility.publications = true;
+      updatedVisibility.certifications = true;
+      updatedVisibility.services = false;
+      updatedVisibility.testimonials = false;
+    } else if (newPersona === 'freelancer') {
+      // Freelancers lead with services, testimonials, and deliverables
+      updatedVisibility.services = true;
+      updatedVisibility.testimonials = true;
+      updatedVisibility.projects = true;
+      updatedVisibility.skills = true;
+      updatedVisibility.experience = false;
+      updatedVisibility.education = false;
+    }
+
+    const updated: PortfolioData = {
+      ...portfolio,
+      persona: newPersona,
+      role: newPersona as UserRole,
+      sectionOrder: emphasis,
+      sectionVisibility: updatedVisibility,
+    };
+    setHistory((prev) => [...prev, updated]);
+    setFuture([]);
+    onUpdatePortfolio(updated);
+  };
+
+  // Handle Discipline Selection
+  const handleSelectDiscipline = (discId: string) => {
+    setSelectedBranch(discId);
+    const cfg = getDisciplineConfig(discId, discId === 'other' ? customBranchName : undefined);
+    const updated: PortfolioData = {
+      ...portfolio,
+      branch: discId as any,
+      discipline: discId,
+      disciplineName: discId === 'other' ? (customBranchName || 'Specialized Engineering') : cfg.shortName,
+    };
+    setHistory((prev) => [...prev, updated]);
+    setFuture([]);
+    onUpdatePortfolio(updated);
+  };
+
+  // Handle Free-Text Custom Discipline
+  const handleCustomBranchChange = (text: string) => {
+    setCustomBranchName(text);
+    const updated: PortfolioData = {
+      ...portfolio,
+      branch: 'other' as any,
+      discipline: 'other',
+      disciplineName: text || 'Specialized Engineering',
+    };
+    onUpdatePortfolio(updated);
+  };
+
+  // Quick-Add Domain Skill
+  const handleToggleDomainSkill = (skillName: string, category: string) => {
+    const existingIndex = skillsList.findIndex((s) => s.name.toLowerCase() === skillName.toLowerCase());
+    if (existingIndex >= 0) {
+      const updated = skillsList.filter((_, i) => i !== existingIndex);
+      setSkillsList(updated);
+      onUpdatePortfolio({ ...portfolio, skills: updated });
+    } else {
+      const updated = [...skillsList, { name: skillName, category, level: 'advanced' }];
+      setSkillsList(updated);
+      onUpdatePortfolio({ ...portfolio, skills: updated });
+    }
+  };
+
+  // Run AI Generation (Autopilot)
   const handleRunAutopilot = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setIsGenerating(true);
     setGenerationError(null);
-    setGenerationStep(`Analyzing ${activeDiscipline.label} requirements...`);
+    setStreamProgress(15);
+    setGenerationStep(`Analyzing ${activeDiscipline.label} engineering taxonomy...`);
+
+    const timer1 = setTimeout(() => {
+      setStreamProgress(45);
+      setGenerationStep(`Formulating persona structure for ${autopilotRole.toUpperCase()}...`);
+    }, 400);
+
+    const timer2 = setTimeout(() => {
+      setStreamProgress(75);
+      setGenerationStep(`Structuring verified project metrics & Bento telemetry...`);
+    }, 800);
 
     try {
-      setTimeout(() => setGenerationStep(`Synthesizing tailored ${autopilotRole.toUpperCase()} portfolio...`), 300);
-
       const result = await AiApiClient.generatePortfolio({
         name: autopilotName || 'Alex Chen',
-        branch: selectedBranch,
-        customBranchName: selectedBranch === 'custom' ? customBranchName : undefined,
+        branch: selectedBranch as EducationBranch,
+        customBranchName: selectedBranch === 'other' ? customBranchName : undefined,
         interests: autopilotInterests || activeDiscipline.defaultInterests.join(', '),
         role: autopilotRole,
         skills: skillsList,
@@ -214,6 +329,9 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
         },
       });
 
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+      setStreamProgress(100);
       setGenerationStep('Assembling 3D telemetry and Bento statistics...');
 
       // Save to undo history, clear redo stack
@@ -241,14 +359,12 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
         origin: { y: 0.6 },
         colors: ['#00f2fe', '#ff0055', '#ffffff'],
       });
-
-      // Advance to Autopilot overview tab
-      setActiveTab('autopilot');
     } catch (err: any) {
+      clearTimeout(timer1);
+      clearTimeout(timer2);
       setGenerationError(err?.message || 'Failed to complete generation. Please retry.');
     } finally {
       setIsGenerating(false);
-      setGenerationStep('');
     }
   };
 
@@ -598,6 +714,54 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
     }
   };
 
+  // Persona Options Definition
+  const PERSONA_OPTIONS: Array<{
+    id: Persona;
+    label: string;
+    badge: string;
+    desc: string;
+    emphasis: string;
+  }> = [
+    {
+      id: 'student',
+      label: 'Student',
+      badge: 'Academic & Capstones',
+      desc: 'Focuses on degree coursework, academic honors, verified capstone projects, and lab prototypes.',
+      emphasis: 'Leads with: Education & Selected Projects',
+    },
+    {
+      id: 'job_seeker',
+      label: 'Job Seeker',
+      badge: 'ATS & Quantitative Proof',
+      desc: 'Optimized for recruiter scanning, immediate core stack competencies, and impact metrics.',
+      emphasis: 'Leads with: Skills, Projects & Experience',
+    },
+    {
+      id: 'professional',
+      label: 'Professional',
+      badge: 'Enterprise Impact & Scale',
+      desc: 'Emphasizes industry tenure, systems architecture, team leadership, and standards compliance.',
+      emphasis: 'Leads with: Experience & Architecture',
+    },
+    {
+      id: 'freelancer',
+      label: 'Freelancer',
+      badge: 'Client Deliverables & Scope',
+      desc: 'Showcases end-to-end client deliverables, consulting packages, testimonials, and rapid turnaround.',
+      emphasis: 'Leads with: Services & Testimonials',
+    },
+  ];
+
+  // Discipline Options Definition (5 Core + Other Free Text)
+  const DISCIPLINE_CARDS: Array<{ id: string; label: string; desc: string }> = [
+    { id: 'mechanical', label: 'Mechanical', desc: 'Machine design, FEA simulation, CAD, thermal & GD&T' },
+    { id: 'civil', label: 'Civil', desc: 'Structural analysis, seismic codes, BIM, geotechnical' },
+    { id: 'electrical', label: 'Electrical', desc: 'Circuits, PCB layout, power systems, motor drives' },
+    { id: 'mechatronics', label: 'Mechatronics', desc: 'Robotics, ROS2, embedded firmware, sensor fusion, PLC' },
+    { id: 'cs_it', label: 'Computer Science', desc: 'Algorithms, neural networks, cloud systems, full-stack' },
+    { id: 'other', label: 'Other (Free text)', desc: 'Custom branch, specialized trades, or research fields' },
+  ];
+
   return (
     <div
       style={{
@@ -665,7 +829,7 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
                     color: '#ffffff',
                   }}
                 >
-                  AI PORTFOLIO STUDIO // MULTI-DISCIPLINE GENERATOR
+                  AI PORTFOLIO STUDIO // GENERATOR
                 </h3>
 
                 {/* Server Status Badge */}
@@ -698,7 +862,7 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
                 </div>
               </div>
               <p style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
-                DISCIPLINE: {activeDiscipline.label.toUpperCase()} // ROLE: {portfolio.role.toUpperCase()}
+                DISCIPLINE: {activeDiscipline.label.toUpperCase()} // PERSONA: {autopilotRole.toUpperCase()}
               </p>
             </div>
           </div>
@@ -823,59 +987,116 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
           </div>
         </div>
 
-        {/* Tab Navigation: Enter Details -> Generate Portfolio -> Customize -> Download or Publish */}
+        {/* STEPPER BAR: 1. Details -> 2. Generate -> 3. Customize -> 4. Download/Publish */}
         <div
+          className="stepper-container"
           style={{
             display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '14px 28px',
+            background: 'rgba(5, 7, 12, 0.5)',
             borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
-            background: 'rgba(5, 7, 12, 0.4)',
-            overflowX: 'auto',
           }}
         >
           {[
-            { id: 'details', label: '1. Enter Details', icon: Edit3 },
-            { id: 'autopilot', label: '2. Generate (AI Autopilot)', icon: Sparkles },
-            { id: 'sections', label: '3. Sections & AI Rewriter', icon: Layers },
-            { id: 'chat', label: '4. Conversational Editor', icon: MessageSquare },
-            { id: 'theme', label: '5. Visual Themes & 3D', icon: Palette },
-            { id: 'export', label: '6. Download & Publish', icon: Download },
-          ].map((tab) => {
-            const Icon = tab.icon;
-            const active = activeTab === tab.id;
+            { id: 'details' as const, stepNumber: 1, label: 'Details', desc: 'Persona, Branch & Inputs' },
+            { id: 'generate' as const, stepNumber: 2, label: 'Generate', desc: 'AI Synthesis & Audit' },
+            { id: 'customize' as const, stepNumber: 3, label: 'Customize', desc: 'Sections, Tones & Themes' },
+            { id: 'download_publish' as const, stepNumber: 4, label: 'Download / Publish', desc: 'ZIP, ATS Resume & Share' },
+          ].map((step, idx) => {
+            const isCurrent = currentStep === step.id;
+            const isCompleted =
+              (step.id === 'details' && currentStep !== 'details') ||
+              (step.id === 'generate' && (currentStep === 'customize' || currentStep === 'download_publish')) ||
+              (step.id === 'customize' && currentStep === 'download_publish');
+
+            const circleClass = isCurrent
+              ? 'stepper-circle active'
+              : isCompleted
+              ? 'stepper-circle completed'
+              : 'stepper-circle upcoming';
+
             return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id as typeof activeTab)}
-                style={{
-                  background: active ? 'rgba(0, 242, 254, 0.08)' : 'transparent',
-                  border: 'none',
-                  borderBottom: active ? '2px solid var(--accent-cyan)' : '2px solid transparent',
-                  padding: '14px 20px',
-                  color: active ? 'var(--accent-cyan)' : 'var(--text-secondary)',
-                  fontFamily: 'var(--font-heading)',
-                  fontSize: '0.82rem',
-                  fontWeight: 600,
-                  letterSpacing: '0.04em',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  whiteSpace: 'nowrap',
-                  transition: 'all 0.2s ease',
-                }}
-              >
-                <Icon size={14} />
-                <span>{tab.label}</span>
-              </button>
+              <React.Fragment key={step.id}>
+                <button
+                  onClick={() => setCurrentStep(step.id)}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    padding: '6px 12px',
+                    borderRadius: '8px',
+                    transition: 'all 0.2s ease',
+                  }}
+                >
+                  <div
+                    className={circleClass}
+                    style={{
+                      width: '32px',
+                      height: '32px',
+                      borderRadius: '50%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontFamily: 'var(--font-mono)',
+                      fontWeight: 700,
+                      fontSize: '0.85rem',
+                      flexShrink: 0,
+                    }}
+                  >
+                    {isCompleted ? <Check size={16} /> : step.stepNumber}
+                  </div>
+                  <div>
+                    <div
+                      style={{
+                        fontFamily: 'var(--font-heading)',
+                        fontSize: '0.88rem',
+                        fontWeight: 700,
+                        color: isCurrent ? 'var(--accent-cyan)' : isCompleted ? '#ffffff' : 'rgba(255, 255, 255, 0.5)',
+                        letterSpacing: '0.04em',
+                      }}
+                    >
+                      {step.label}
+                    </div>
+                    <div
+                      style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: '0.7rem',
+                        color: 'var(--text-secondary)',
+                      }}
+                    >
+                      {step.desc}
+                    </div>
+                  </div>
+                </button>
+                {idx < 3 && (
+                  <div
+                    style={{
+                      flex: 1,
+                      height: '2px',
+                      background: isCompleted ? 'var(--accent-cyan)' : 'rgba(255, 255, 255, 0.08)',
+                      margin: '0 8px',
+                      transition: 'background 0.3s ease',
+                    }}
+                  />
+                )}
+              </React.Fragment>
             );
           })}
         </div>
 
         {/* Tab Body */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '32px' }}>
-          {/* STEP 1: ENTER DETAILS */}
-          {activeTab === 'details' && (
-            <div style={{ maxWidth: '860px', margin: '0 auto' }}>
+          {/* ========================================================================= */}
+          {/* STEP 1: DETAILS */}
+          {/* ========================================================================= */}
+          {currentStep === 'details' && (
+            <div style={{ maxWidth: '880px', margin: '0 auto' }}>
               <div style={{ marginBottom: '24px', textAlign: 'center' }}>
                 <h3
                   style={{
@@ -889,7 +1110,7 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
                   Step 1: Enter Your Background & Verified Details
                 </h3>
                 <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', lineHeight: 1.5 }}>
-                  Select your educational branch, profession, and role. Enter your verified qualifications, skills, and projects without code.
+                  Select your Persona and Engineering Discipline. Enter your verified qualifications, skills, and projects without code.
                 </p>
               </div>
 
@@ -904,18 +1125,18 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
                 }}
               >
                 {[
-                  { id: 'branch_role', label: 'Discipline & Role', icon: Compass },
-                  { id: 'skills', label: `Skills (${skillsList.length})`, icon: Wrench },
-                  { id: 'projects', label: `Projects (${projectsList.length})`, icon: Briefcase },
-                  { id: 'education', label: `Education (${educationList.length})`, icon: GraduationCap },
-                  { id: 'experience', label: `Experience (${experienceList.length})`, icon: Award },
+                  { id: 'persona_discipline' as const, label: 'Persona & Discipline', icon: Compass },
+                  { id: 'skills' as const, label: `Skills (${skillsList.length})`, icon: Wrench },
+                  { id: 'projects' as const, label: `Projects (${projectsList.length})`, icon: Briefcase },
+                  { id: 'education' as const, label: `Education (${educationList.length})`, icon: GraduationCap },
+                  { id: 'experience' as const, label: `Experience (${experienceList.length})`, icon: Award },
                 ].map((st) => {
                   const Icon = st.icon;
                   const active = detailsSubTab === st.id;
                   return (
                     <button
                       key={st.id}
-                      onClick={() => setDetailsSubTab(st.id as any)}
+                      onClick={() => setDetailsSubTab(st.id)}
                       style={{
                         padding: '8px 14px',
                         borderRadius: '6px',
@@ -938,10 +1159,10 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
                 })}
               </div>
 
-              {/* SECTION 1: DISCIPLINE & ROLE */}
-              {detailsSubTab === 'branch_role' && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
-                  {/* Educational Branch Selection Grid */}
+              {/* SUB-SECTION 1: PERSONA & DISCIPLINE */}
+              {detailsSubTab === 'persona_discipline' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
+                  {/* 1. Persona Selection */}
                   <div>
                     <label
                       style={{
@@ -953,26 +1174,86 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
                         letterSpacing: '0.08em',
                       }}
                     >
-                      1. SELECT EDUCATIONAL BRANCH / PROFESSION
+                      1. SELECT YOUR PERSONA (ADAPTS SECTION EMPHASIS & VISIBILITY)
+                    </label>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
+                      {PERSONA_OPTIONS.map((p) => {
+                        const selected = autopilotRole === p.id;
+                        return (
+                          <div
+                            key={p.id}
+                            onClick={() => handleSelectPersona(p.id)}
+                            style={{
+                              padding: '16px',
+                              borderRadius: '10px',
+                              border: selected ? '2px solid var(--accent-cyan)' : '1px solid rgba(255, 255, 255, 0.1)',
+                              background: selected ? 'rgba(0, 242, 254, 0.08)' : 'rgba(255, 255, 255, 0.02)',
+                              cursor: 'pointer',
+                              transition: 'all 0.2s ease',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: '6px',
+                            }}
+                          >
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <span style={{ fontWeight: 700, color: selected ? 'var(--accent-cyan)' : '#fff', fontSize: '0.95rem' }}>
+                                {p.label}
+                              </span>
+                              <span
+                                style={{
+                                  fontSize: '0.68rem',
+                                  fontFamily: 'var(--font-mono)',
+                                  padding: '2px 8px',
+                                  borderRadius: '999px',
+                                  background: selected ? 'var(--accent-cyan)' : 'rgba(255, 255, 255, 0.1)',
+                                  color: selected ? '#000' : 'rgba(255, 255, 255, 0.7)',
+                                  fontWeight: 600,
+                                }}
+                              >
+                                {p.badge}
+                              </span>
+                            </div>
+                            <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+                              {p.desc}
+                            </p>
+                            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.7rem', color: 'var(--accent-cyan)', marginTop: '4px' }}>
+                              {p.emphasis}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* 2. Discipline Selection Grid */}
+                  <div>
+                    <label
+                      style={{
+                        display: 'block',
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: '0.78rem',
+                        color: 'var(--accent-cyan)',
+                        marginBottom: '10px',
+                        letterSpacing: '0.08em',
+                      }}
+                    >
+                      2. SELECT ENGINEERING DISCIPLINE
                     </label>
                     <div
                       style={{
                         display: 'grid',
-                        gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
+                        gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))',
                         gap: '10px',
-                        maxHeight: '260px',
-                        overflowY: 'auto',
-                        padding: '4px',
                       }}
                     >
-                      {ALL_DISCIPLINE_OPTIONS.map((disc) => {
+                      {DISCIPLINE_CARDS.map((disc) => {
                         const selected = selectedBranch === disc.id;
                         return (
                           <div
                             key={disc.id}
-                            onClick={() => setSelectedBranch(disc.id)}
+                            onClick={() => handleSelectDiscipline(disc.id)}
                             style={{
-                              padding: '12px 14px',
+                              padding: '14px',
                               borderRadius: '8px',
                               border: selected ? '2px solid var(--accent-cyan)' : '1px solid rgba(255, 255, 255, 0.1)',
                               background: selected ? 'rgba(0, 242, 254, 0.1)' : 'rgba(255, 255, 255, 0.02)',
@@ -983,16 +1264,16 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
                             <div
                               style={{
                                 fontFamily: 'var(--font-heading)',
-                                fontSize: '0.85rem',
+                                fontSize: '0.9rem',
                                 fontWeight: 700,
                                 color: selected ? 'var(--accent-cyan)' : '#ffffff',
-                                marginBottom: '2px',
+                                marginBottom: '4px',
                               }}
                             >
                               {disc.label}
                             </div>
-                            <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
-                              {disc.shortName} • {disc.category}
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+                              {disc.desc}
                             </div>
                           </div>
                         );
@@ -1000,17 +1281,32 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
                     </div>
                   </div>
 
-                  {/* Custom Branch Input if selected */}
-                  {selectedBranch === 'custom' && (
-                    <div style={{ padding: '16px', borderRadius: '10px', background: 'rgba(0, 242, 254, 0.06)', border: '1px solid var(--accent-cyan)' }}>
-                      <label style={{ display: 'block', fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: 'var(--accent-cyan)', marginBottom: '8px' }}>
-                        ENTER YOUR CUSTOM BRANCH OR PROFESSION
+                  {/* Dynamic Free-Text Custom Discipline Input */}
+                  {selectedBranch === 'other' && (
+                    <div
+                      style={{
+                        padding: '18px',
+                        borderRadius: '10px',
+                        background: 'rgba(0, 242, 254, 0.06)',
+                        border: '1px solid var(--accent-cyan)',
+                      }}
+                    >
+                      <label
+                        style={{
+                          display: 'block',
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: '0.78rem',
+                          color: 'var(--accent-cyan)',
+                          marginBottom: '8px',
+                        }}
+                      >
+                        SPECIFY CUSTOM DISCIPLINE (DYNAMIC DOMAIN PROMPT SYNTHESIS)
                       </label>
                       <input
                         type="text"
-                        placeholder="e.g. Industrial Design, Marine Engineering, Architecture, Product Management..."
+                        placeholder="e.g. Biomedical Engineering, Aerospace Propulsion, Chemical Systems..."
                         value={customBranchName}
-                        onChange={(e) => setCustomBranchName(e.target.value)}
+                        onChange={(e) => handleCustomBranchChange(e.target.value)}
                         style={{
                           width: '100%',
                           padding: '12px 16px',
@@ -1022,46 +1318,14 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
                           outline: 'none',
                         }}
                       />
+                      <p style={{ fontSize: '0.75rem', color: 'rgba(255, 255, 255, 0.65)', marginTop: '8px' }}>
+                        Custom disciplines dynamically generate technical terminology, skill categories, and project archetypes without requiring code changes.
+                      </p>
                     </div>
                   )}
 
-                  {/* Role Selector */}
-                  <div>
-                    <label style={{ display: 'block', fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: 'var(--accent-cyan)', marginBottom: '10px' }}>
-                      2. CURRENT ROLE
-                    </label>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
-                      {[
-                        { id: 'student', label: '1. Student', desc: 'Focuses on coursework, academic projects, CAD/lab models' },
-                        { id: 'job_seeker', label: '2. Job Seeker', desc: 'ATS-tailored headline, verified skills & portfolio resume' },
-                        { id: 'professional', label: '3. Working Professional', desc: 'Industry leadership, production metrics, standards compliance' },
-                        { id: 'freelancer', label: '4. Freelancer', desc: 'Consulting deliverables, client case studies, custom scopes' },
-                      ].map((r) => {
-                        const selected = autopilotRole === r.id;
-                        return (
-                          <div
-                            key={r.id}
-                            onClick={() => setAutopilotRole(r.id as any)}
-                            style={{
-                              padding: '12px 16px',
-                              borderRadius: '8px',
-                              border: selected ? '2px solid var(--accent-cyan)' : '1px solid rgba(255, 255, 255, 0.1)',
-                              background: selected ? 'rgba(0, 242, 254, 0.08)' : 'rgba(255, 255, 255, 0.02)',
-                              cursor: 'pointer',
-                            }}
-                          >
-                            <div style={{ fontWeight: 700, color: selected ? 'var(--accent-cyan)' : '#fff', fontSize: '0.88rem' }}>
-                              {r.label}
-                            </div>
-                            <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>{r.desc}</div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Personal Details */}
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px' }}>
+                  {/* Personal Contact Details */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px' }}>
                     <div>
                       <label style={{ display: 'block', fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'rgba(255,255,255,0.7)', marginBottom: '6px' }}>
                         FULL NAME
@@ -1070,7 +1334,7 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
                         type="text"
                         value={autopilotName}
                         onChange={(e) => setAutopilotName(e.target.value)}
-                        placeholder="e.g. Sharvil Naikwade"
+                        placeholder="e.g. Alex Chen"
                         style={{
                           width: '100%',
                           padding: '12px 16px',
@@ -1083,13 +1347,13 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
                     </div>
                     <div>
                       <label style={{ display: 'block', fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'rgba(255,255,255,0.7)', marginBottom: '6px' }}>
-                        EMAIL / CONTACT
+                        EMAIL ADDRESS
                       </label>
                       <input
                         type="email"
                         value={userEmail}
                         onChange={(e) => setUserEmail(e.target.value)}
-                        placeholder="e.g. sharvil@example.com"
+                        placeholder="e.g. alex.chen@engineering.io"
                         style={{
                           width: '100%',
                           padding: '12px 16px',
@@ -1108,7 +1372,7 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
                         type="text"
                         value={userLocation}
                         onChange={(e) => setUserLocation(e.target.value)}
-                        placeholder="e.g. Pune, Maharashtra / Remote"
+                        placeholder="e.g. Pune, India / Remote"
                         style={{
                           width: '100%',
                           padding: '12px 16px',
@@ -1121,7 +1385,7 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
                     </div>
                   </div>
 
-                  {/* Areas of Interest with Suggested Branch Chips */}
+                  {/* Areas of Interest */}
                   <div>
                     <label style={{ display: 'block', fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'rgba(255,255,255,0.7)', marginBottom: '6px' }}>
                       AREAS OF INTEREST (Comma-separated)
@@ -1130,7 +1394,7 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
                       type="text"
                       value={autopilotInterests}
                       onChange={(e) => setAutopilotInterests(e.target.value)}
-                      placeholder="e.g. CAD, Finite Element Analysis, Thermal Systems..."
+                      placeholder="e.g. Finite Element Analysis, CAD Design, Robotic Kinematics..."
                       style={{
                         width: '100%',
                         padding: '12px 16px',
@@ -1151,7 +1415,7 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
                           type="button"
                           onClick={() => {
                             if (!autopilotInterests.includes(interest)) {
-                              setAutopilotInterests(prev => prev ? `${prev}, ${interest}` : interest);
+                              setAutopilotInterests((prev) => (prev ? `${prev}, ${interest}` : interest));
                             }
                           }}
                           style={{
@@ -1170,8 +1434,8 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
                     </div>
                   </div>
 
-                  {/* Next Action */}
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '14px' }}>
+                  {/* Bottom Navigation for Step 1 */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '16px' }}>
                     <button
                       type="button"
                       onClick={() => setDetailsSubTab('skills')}
@@ -1184,55 +1448,77 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
                 </div>
               )}
 
-              {/* SECTION 2: SKILLS MANAGER */}
+              {/* SUB-SECTION 2: SKILLS MANAGER */}
               {detailsSubTab === 'skills' && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <h4 style={{ fontFamily: 'var(--font-heading)', color: '#fff', fontSize: '1.1rem' }}>
-                      Your Technical & Domain Skills ({skillsList.length})
-                    </h4>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                      Click on any skill to remove it
-                    </span>
+                    <div>
+                      <h4 style={{ fontFamily: 'var(--font-heading)', color: '#fff', fontSize: '1.1rem' }}>
+                        Verified Skills ({skillsList.length})
+                      </h4>
+                      <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem' }}>
+                        Click a skill badge to remove it, or use the quick-add categories below.
+                      </p>
+                    </div>
                   </div>
+
+                  {/* Empty State for Skills */}
+                  {skillsList.length === 0 && (
+                    <div className="empty-state-card">
+                      <Wrench size={32} color="var(--accent-cyan)" />
+                      <h5 style={{ color: '#fff', fontSize: '1.05rem', margin: 0 }}>No Verified Skills Added Yet</h5>
+                      <p style={{ color: 'var(--text-secondary)', fontSize: '0.82rem', maxWidth: '420px', margin: 0 }}>
+                        Click any of the suggested {activeDiscipline.label} competencies below to add with one click, or enter custom skills.
+                      </p>
+                    </div>
+                  )}
 
                   {/* Current Skills List */}
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', padding: '16px', background: 'rgba(5, 7, 11, 0.6)', borderRadius: '10px' }}>
-                    {skillsList.map((skill, idx) => (
-                      <span
-                        key={idx}
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                          background: 'rgba(0, 242, 254, 0.1)',
-                          border: '1px solid rgba(0, 242, 254, 0.3)',
-                          padding: '6px 12px',
-                          borderRadius: '8px',
-                          fontSize: '0.8rem',
-                          color: '#fff',
-                          fontFamily: 'var(--font-mono)',
-                        }}
-                      >
-                        <span>{skill.name}</span>
-                        <button
-                          type="button"
-                          onClick={() => setSkillsList(skillsList.filter((_, i) => i !== idx))}
-                          style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.6)', cursor: 'pointer', padding: 0 }}
+                  {skillsList.length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', padding: '16px', background: 'rgba(5, 7, 11, 0.6)', borderRadius: '10px' }}>
+                      {skillsList.map((skill, idx) => (
+                        <span
+                          key={idx}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            background: 'rgba(0, 242, 254, 0.1)',
+                            border: '1px solid rgba(0, 242, 254, 0.3)',
+                            padding: '6px 12px',
+                            borderRadius: '8px',
+                            fontSize: '0.8rem',
+                            color: '#fff',
+                            fontFamily: 'var(--font-mono)',
+                          }}
                         >
-                          ×
-                        </button>
-                      </span>
-                    ))}
-                  </div>
+                          <span>{skill.name}</span>
+                          <button
+                            type="button"
+                            onClick={() => setSkillsList(skillsList.filter((_, i) => i !== idx))}
+                            style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.6)', cursor: 'pointer', padding: 0 }}
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
 
-                  {/* Add Custom Skill Form */}
+                  {/* Add Custom Skill Input */}
                   <div style={{ display: 'flex', gap: '10px' }}>
                     <input
                       type="text"
-                      placeholder="Add a new skill (e.g. SolidWorks, ROS, ETABS, MATLAB)..."
+                      placeholder="Type a custom skill (e.g. SolidWorks, ANSYS, ROS2, Docker)..."
                       value={newSkillName}
                       onChange={(e) => setNewSkillName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && newSkillName.trim()) {
+                          e.preventDefault();
+                          setSkillsList([...skillsList, { name: newSkillName.trim(), category: 'Core Competency', level: 'advanced' }]);
+                          setNewSkillName('');
+                        }
+                      }}
                       style={{
                         flex: 1,
                         padding: '10px 14px',
@@ -1246,7 +1532,7 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
                       type="button"
                       onClick={() => {
                         if (newSkillName.trim()) {
-                          setSkillsList([...skillsList, { name: newSkillName.trim(), category: newSkillCategory, level: 'advanced' }]);
+                          setSkillsList([...skillsList, { name: newSkillName.trim(), category: 'Core Competency', level: 'advanced' }]);
                           setNewSkillName('');
                         }
                       }}
@@ -1258,42 +1544,57 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
                     </button>
                   </div>
 
-                  {/* 1-Click Recommended Skills from Chosen Branch */}
-                  <div>
-                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--accent-cyan)', marginBottom: '8px' }}>
-                      Suggested Tools & Skills for {activeDiscipline.label}:
+                  {/* Quick Skill Suggestions from config/disciplines.ts */}
+                  <div style={{ padding: '18px', borderRadius: '12px', background: 'rgba(255, 255, 255, 0.02)', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
+                      <Lightbulb size={16} color="var(--accent-cyan)" />
+                      <span style={{ fontFamily: 'var(--font-heading)', fontWeight: 700, color: '#fff', fontSize: '0.9rem' }}>
+                        Industry Competencies for {activeDiscipline.label}:
+                      </span>
                     </div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                      {activeDiscipline.recommendedSkills.map((rs) => {
-                        const alreadyAdded = skillsList.some(s => s.name.toLowerCase() === rs.name.toLowerCase());
-                        return (
-                          <button
-                            key={rs.name}
-                            type="button"
-                            disabled={alreadyAdded}
-                            onClick={() => {
-                              if (!alreadyAdded) setSkillsList([...skillsList, rs]);
-                            }}
-                            style={{
-                              background: alreadyAdded ? 'rgba(0, 242, 254, 0.2)' : 'rgba(255, 255, 255, 0.04)',
-                              border: alreadyAdded ? '1px solid var(--accent-cyan)' : '1px solid rgba(255, 255, 255, 0.1)',
-                              color: alreadyAdded ? 'var(--accent-cyan)' : 'rgba(255, 255, 255, 0.8)',
-                              padding: '5px 12px',
-                              borderRadius: '6px',
-                              fontSize: '0.75rem',
-                              fontFamily: 'var(--font-mono)',
-                              cursor: alreadyAdded ? 'default' : 'pointer',
-                            }}
-                          >
-                            {alreadyAdded ? '✓ ' : '+ '} {rs.name}
-                          </button>
-                        );
-                      })}
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      {activeDiscipline.skillCategories.map((cat) => (
+                        <div key={cat.name}>
+                          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--accent-cyan)', marginBottom: '6px' }}>
+                            {cat.name.toUpperCase()}
+                          </div>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                            {cat.skills.map((skillName) => {
+                              const alreadyAdded = skillsList.some((s) => s.name.toLowerCase() === skillName.toLowerCase());
+                              return (
+                                <button
+                                  key={skillName}
+                                  type="button"
+                                  onClick={() => handleToggleDomainSkill(skillName, cat.name)}
+                                  style={{
+                                    background: alreadyAdded ? 'rgba(0, 242, 254, 0.15)' : 'rgba(255, 255, 255, 0.05)',
+                                    border: alreadyAdded ? '1px solid var(--accent-cyan)' : '1px solid rgba(255, 255, 255, 0.12)',
+                                    color: alreadyAdded ? 'var(--accent-cyan)' : '#ffffff',
+                                    borderRadius: '6px',
+                                    padding: '4px 10px',
+                                    fontSize: '0.75rem',
+                                    fontFamily: 'var(--font-mono)',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '4px',
+                                  }}
+                                >
+                                  {alreadyAdded ? <Check size={11} /> : <Plus size={11} />}
+                                  <span>{skillName}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
 
+                  {/* Navigation */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '14px' }}>
-                    <button type="button" onClick={() => setDetailsSubTab('branch_role')} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', padding: '10px 18px', borderRadius: '8px', cursor: 'pointer' }}>
+                    <button type="button" onClick={() => setDetailsSubTab('persona_discipline')} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', padding: '10px 18px', borderRadius: '8px', cursor: 'pointer' }}>
                       ← Back
                     </button>
                     <button type="button" onClick={() => setDetailsSubTab('projects')} className="btn-primary" style={{ padding: '10px 22px' }}>
@@ -1303,18 +1604,13 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
                 </div>
               )}
 
-              {/* SECTION 3: PROJECTS MANAGER */}
+              {/* SUB-SECTION 3: PROJECTS MANAGER */}
               {detailsSubTab === 'projects' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div>
-                      <h4 style={{ fontFamily: 'var(--font-heading)', color: '#fff', fontSize: '1.1rem' }}>
-                        Your Verified Projects ({projectsList.length})
-                      </h4>
-                      <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-                        All user projects are verified. No credentials or metrics are fabricated.
-                      </p>
-                    </div>
+                    <h4 style={{ fontFamily: 'var(--font-heading)', color: '#fff', fontSize: '1.1rem' }}>
+                      Verified Projects & Capstones ({projectsList.length})
+                    </h4>
                     <button
                       type="button"
                       onClick={() => setIsAddingProject(!isAddingProject)}
@@ -1326,118 +1622,120 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
                     </button>
                   </div>
 
-                  {/* Add Project Form */}
-                  {isAddingProject && (
-                    <div style={{ padding: '20px', borderRadius: '12px', background: 'rgba(5, 7, 11, 0.9)', border: '1px solid var(--accent-cyan)' }}>
-                      <h5 style={{ color: '#fff', marginBottom: '12px', fontFamily: 'var(--font-heading)' }}>
-                        New Verified Project
-                      </h5>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                        <input
-                          type="text"
-                          placeholder="Project Title (e.g. Gearbox FEA Optimization, AMR Robot SLAM, G+12 Seismic Design)..."
-                          value={newProjTitle}
-                          onChange={(e) => setNewProjTitle(e.target.value)}
-                          style={{ padding: '10px 14px', background: '#030508', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '6px', color: '#fff' }}
-                        />
-                        <textarea
-                          rows={3}
-                          placeholder="Project Description (tools used, mechanical/computational approach, problem solved)..."
-                          value={newProjDesc}
-                          onChange={(e) => setNewProjDesc(e.target.value)}
-                          style={{ padding: '10px 14px', background: '#030508', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '6px', color: '#fff', fontSize: '0.85rem' }}
-                        />
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                          <input
-                            type="text"
-                            placeholder="Tools / Tags (e.g. SolidWorks, ANSYS, ROS 2, ETABS)..."
-                            value={newProjTags}
-                            onChange={(e) => setNewProjTags(e.target.value)}
-                            style={{ padding: '8px 12px', background: '#030508', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '6px', color: '#fff', fontSize: '0.85rem' }}
-                          />
-                          <input
-                            type="text"
-                            placeholder="Verified Metrics (e.g. 14% Mass Reduction, Sub-2cm Precision)..."
-                            value={newProjMetrics}
-                            onChange={(e) => setNewProjMetrics(e.target.value)}
-                            style={{ padding: '8px 12px', background: '#030508', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '6px', color: '#fff', fontSize: '0.85rem' }}
-                          />
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (newProjTitle.trim()) {
-                              const newProj: ProjectItem = {
-                                id: `user-proj-${Date.now()}`,
-                                title: newProjTitle.trim(),
-                                description: newProjDesc.trim(),
-                                tags: newProjTags.split(',').map(t => t.trim()).filter(Boolean),
-                                metrics: newProjMetrics.trim(),
-                                isAiIdea: false,
-                              };
-                              setProjectsList([...projectsList, newProj]);
-                              setNewProjTitle('');
-                              setNewProjDesc('');
-                              setNewProjTags('');
-                              setNewProjMetrics('');
-                              setIsAddingProject(false);
-                            }
-                          }}
-                          className="btn-primary"
-                          style={{ alignSelf: 'flex-start', padding: '8px 18px', marginTop: '6px' }}
-                        >
-                          Save Verified Project
-                        </button>
-                      </div>
+                  {/* Empty State for Projects */}
+                  {projectsList.length === 0 && !isAddingProject && (
+                    <div className="empty-state-card">
+                      <Briefcase size={32} color="var(--accent-cyan)" />
+                      <h5 style={{ color: '#fff', fontSize: '1.05rem', margin: 0 }}>No Verified Projects Listed</h5>
+                      <p style={{ color: 'var(--text-secondary)', fontSize: '0.82rem', maxWidth: '440px', margin: 0 }}>
+                        Add your capstone, hardware prototype, software architecture, or client deliverables.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setIsAddingProject(true)}
+                        className="btn-primary"
+                        style={{ padding: '8px 16px', fontSize: '0.82rem' }}
+                      >
+                        <Plus size={14} />
+                        <span>Add First Project</span>
+                      </button>
                     </div>
                   )}
 
-                  {/* List of Verified Projects */}
+                  {/* Add Project Form */}
+                  {isAddingProject && (
+                    <div style={{ padding: '18px', borderRadius: '10px', background: '#05070b', border: '1px solid var(--accent-cyan)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      <input
+                        type="text"
+                        placeholder="Project Title (e.g. Planetary Gearbox with FEA Stress Validation)..."
+                        value={newProjTitle}
+                        onChange={(e) => setNewProjTitle(e.target.value)}
+                        style={{ padding: '10px 14px', background: '#020408', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '6px', color: '#fff' }}
+                      />
+                      <textarea
+                        rows={3}
+                        placeholder="Project Description & Engineering Actions..."
+                        value={newProjDesc}
+                        onChange={(e) => setNewProjDesc(e.target.value)}
+                        style={{ padding: '10px 14px', background: '#020408', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '6px', color: '#fff', fontSize: '0.85rem' }}
+                      />
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                        <input
+                          type="text"
+                          placeholder="Tools & Frameworks (e.g. SolidWorks, ANSYS, GD&T)..."
+                          value={newProjTags}
+                          onChange={(e) => setNewProjTags(e.target.value)}
+                          style={{ padding: '8px 12px', background: '#020408', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '6px', color: '#fff' }}
+                        />
+                        <input
+                          type="text"
+                          placeholder={activeDiscipline.metricsPlaceholder || 'Quantifiable Metric (e.g. FOS > 2.2)...'}
+                          value={newProjMetrics}
+                          onChange={(e) => setNewProjMetrics(e.target.value)}
+                          style={{ padding: '8px 12px', background: '#020408', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '6px', color: '#fff' }}
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (newProjTitle.trim()) {
+                            setProjectsList([...projectsList, {
+                              id: `proj-${Date.now()}`,
+                              title: newProjTitle.trim(),
+                              description: newProjDesc.trim(),
+                              tools: newProjTags.split(',').map((t) => t.trim()).filter(Boolean),
+                              tags: newProjTags.split(',').map((t) => t.trim()).filter(Boolean),
+                              metrics: newProjMetrics.trim(),
+                              role: 'Lead Engineer',
+                              isAiIdea: false,
+                            }]);
+                            setNewProjTitle('');
+                            setNewProjDesc('');
+                            setNewProjTags('');
+                            setNewProjMetrics('');
+                            setIsAddingProject(false);
+                          }
+                        }}
+                        className="btn-primary"
+                        style={{ alignSelf: 'flex-start', padding: '8px 16px', marginTop: '6px' }}
+                      >
+                        Save Project
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Projects List */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                    {projectsList.map((p, idx) => (
+                    {projectsList.map((proj, idx) => (
                       <div
-                        key={p.id}
+                        key={proj.id}
                         style={{
-                          padding: '16px',
-                          borderRadius: '10px',
+                          padding: '14px 18px',
+                          borderRadius: '8px',
                           background: 'rgba(255, 255, 255, 0.03)',
-                          border: p.isAiIdea ? '1px dashed var(--accent-magenta)' : '1px solid rgba(255, 255, 255, 0.1)',
+                          border: '1px solid rgba(255, 255, 255, 0.08)',
                           display: 'flex',
                           justifyContent: 'space-between',
-                          alignItems: 'flex-start',
+                          alignItems: 'center',
                         }}
                       >
-                        <div style={{ flex: 1, paddingRight: '14px' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                            <span style={{ fontWeight: 700, color: '#fff', fontSize: '0.95rem' }}>{p.title}</span>
-                            <span
-                              style={{
-                                fontSize: '0.65rem',
-                                padding: '2px 8px',
-                                borderRadius: '4px',
-                                background: p.isAiIdea ? 'rgba(255,0,85,0.15)' : 'rgba(0,242,254,0.15)',
-                                color: p.isAiIdea ? 'var(--accent-magenta)' : 'var(--accent-cyan)',
-                                fontFamily: 'var(--font-mono)',
-                              }}
-                            >
-                              {p.isAiIdea ? 'AI SUGGESTION' : 'VERIFIED PROJECT'}
-                            </span>
-                          </div>
-                          <p style={{ fontSize: '0.82rem', color: 'rgba(255, 255, 255, 0.75)', marginBottom: '8px' }}>
-                            {p.description}
-                          </p>
-                          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                            {(p.tools || p.tags || []).map(t => (
-                              <span key={t} style={{ fontSize: '0.7rem', padding: '2px 6px', background: 'rgba(255,255,255,0.06)', borderRadius: '4px', color: '#fff' }}>
-                                {t}
+                        <div style={{ flex: 1 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ fontWeight: 700, color: '#fff', fontSize: '0.92rem' }}>{proj.title}</span>
+                            {proj.metrics && (
+                              <span style={{ fontSize: '0.72rem', color: 'var(--accent-cyan)', fontFamily: 'var(--font-mono)' }}>
+                                [{proj.metrics}]
                               </span>
-                            ))}
+                            )}
+                          </div>
+                          <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                            {proj.description?.slice(0, 110)}...
                           </div>
                         </div>
                         <button
                           type="button"
                           onClick={() => setProjectsList(projectsList.filter((_, i) => i !== idx))}
-                          style={{ background: 'transparent', border: 'none', color: '#ff4466', cursor: 'pointer', padding: '6px' }}
+                          style={{ background: 'transparent', border: 'none', color: '#ff4466', cursor: 'pointer', marginLeft: '12px' }}
                         >
                           <Trash2 size={16} />
                         </button>
@@ -1445,6 +1743,7 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
                     ))}
                   </div>
 
+                  {/* Navigation */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '14px' }}>
                     <button type="button" onClick={() => setDetailsSubTab('skills')} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', padding: '10px 18px', borderRadius: '8px', cursor: 'pointer' }}>
                       ← Back
@@ -1456,12 +1755,12 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
                 </div>
               )}
 
-              {/* SECTION 4: EDUCATION MANAGER */}
+              {/* SUB-SECTION 4: EDUCATION MANAGER */}
               {detailsSubTab === 'education' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <h4 style={{ fontFamily: 'var(--font-heading)', color: '#fff', fontSize: '1.1rem' }}>
-                      Your Education & Academic Degrees ({educationList.length})
+                      Academic Background ({educationList.length})
                     </h4>
                     <button
                       type="button"
@@ -1474,22 +1773,45 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
                     </button>
                   </div>
 
+                  {/* Empty State for Education */}
+                  {educationList.length === 0 && !isAddingEdu && (
+                    <div className="empty-state-card">
+                      <GraduationCap size={32} color="var(--accent-cyan)" />
+                      <h5 style={{ color: '#fff', fontSize: '1.05rem', margin: 0 }}>No Education Records Listed</h5>
+                      <p style={{ color: 'var(--text-secondary)', fontSize: '0.82rem', maxWidth: '440px', margin: 0 }}>
+                        Enter your degree, college/university, graduation year, and GPA or academic honors.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setIsAddingEdu(true)}
+                        className="btn-primary"
+                        style={{ padding: '8px 16px', fontSize: '0.82rem' }}
+                      >
+                        <Plus size={14} />
+                        <span>Add Education</span>
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Add Education Form */}
                   {isAddingEdu && (
                     <div style={{ padding: '18px', borderRadius: '10px', background: '#05070b', border: '1px solid var(--accent-cyan)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                      <input
-                        type="text"
-                        placeholder="Institution (e.g. Rajarambapu Institute of Technology, IIT, NIT)..."
-                        value={newEduInst}
-                        onChange={(e) => setNewEduInst(e.target.value)}
-                        style={{ padding: '8px 12px', background: '#020408', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '6px', color: '#fff' }}
-                      />
-                      <input
-                        type="text"
-                        placeholder="Degree & Specialization (e.g. B.Tech Mechanical Engineering, Diploma Mechatronics)..."
-                        value={newEduDegree}
-                        onChange={(e) => setNewEduDegree(e.target.value)}
-                        style={{ padding: '8px 12px', background: '#020408', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '6px', color: '#fff' }}
-                      />
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                        <input
+                          type="text"
+                          placeholder="Institution / University..."
+                          value={newEduInst}
+                          onChange={(e) => setNewEduInst(e.target.value)}
+                          style={{ padding: '8px 12px', background: '#020408', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '6px', color: '#fff' }}
+                        />
+                        <input
+                          type="text"
+                          placeholder="Degree (e.g. B.Tech Mechanical, B.S. Civil)..."
+                          value={newEduDegree}
+                          onChange={(e) => setNewEduDegree(e.target.value)}
+                          style={{ padding: '8px 12px', background: '#020408', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '6px', color: '#fff' }}
+                        />
+                      </div>
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                         <input
                           type="text"
@@ -1500,7 +1822,7 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
                         />
                         <input
                           type="text"
-                          placeholder="Score / CGPA (e.g. CGPA: 8.4 / 10)..."
+                          placeholder="Score / CGPA (e.g. 8.4 / 10)..."
                           value={newEduScore}
                           onChange={(e) => setNewEduScore(e.target.value)}
                           style={{ padding: '8px 12px', background: '#020408', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '6px', color: '#fff' }}
@@ -1532,6 +1854,7 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
                     </div>
                   )}
 
+                  {/* Education List */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                     {educationList.map((edu, idx) => (
                       <div
@@ -1563,6 +1886,7 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
                     ))}
                   </div>
 
+                  {/* Navigation */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '14px' }}>
                     <button type="button" onClick={() => setDetailsSubTab('projects')} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', padding: '10px 18px', borderRadius: '8px', cursor: 'pointer' }}>
                       ← Back
@@ -1574,12 +1898,12 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
                 </div>
               )}
 
-              {/* SECTION 5: EXPERIENCE MANAGER */}
+              {/* SUB-SECTION 5: EXPERIENCE MANAGER */}
               {detailsSubTab === 'experience' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <h4 style={{ fontFamily: 'var(--font-heading)', color: '#fff', fontSize: '1.1rem' }}>
-                      Your Experience & Internships ({experienceList.length})
+                      Experience & Internships ({experienceList.length})
                     </h4>
                     <button
                       type="button"
@@ -1592,12 +1916,35 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
                     </button>
                   </div>
 
+                  {/* Empty State for Experience */}
+                  {experienceList.length === 0 && !isAddingExp && (
+                    <div className="empty-state-card">
+                      <Award size={32} color="var(--accent-cyan)" />
+                      <h5 style={{ color: '#fff', fontSize: '1.05rem', margin: 0 }}>No Work Experience Listed</h5>
+                      <p style={{ color: 'var(--text-secondary)', fontSize: '0.82rem', maxWidth: '460px', margin: 0 }}>
+                        {autopilotRole === 'student'
+                          ? 'As a Student persona, your 3D portfolio leads with Education and Projects. If you have internships or research positions, add them below.'
+                          : 'Add your employment history, consulting engagements, or industry internships.'}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setIsAddingExp(true)}
+                        className="btn-primary"
+                        style={{ padding: '8px 16px', fontSize: '0.82rem' }}
+                      >
+                        <Plus size={14} />
+                        <span>Add Experience</span>
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Add Experience Form */}
                   {isAddingExp && (
                     <div style={{ padding: '18px', borderRadius: '10px', background: '#05070b', border: '1px solid var(--accent-cyan)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                         <input
                           type="text"
-                          placeholder="Organization / Company..."
+                          placeholder="Company / Organization..."
                           value={newExpCompany}
                           onChange={(e) => setNewExpCompany(e.target.value)}
                           style={{ padding: '8px 12px', background: '#020408', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '6px', color: '#fff' }}
@@ -1633,7 +1980,7 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
                               company: newExpCompany.trim(),
                               role: newExpRole.trim(),
                               period: newExpPeriod.trim(),
-                              points: newExpPoints.split('\n').map(p => p.trim()).filter(Boolean),
+                              points: newExpPoints.split('\n').map((p) => p.trim()).filter(Boolean),
                               isVerified: true,
                             }]);
                             setNewExpCompany('');
@@ -1651,6 +1998,7 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
                     </div>
                   )}
 
+                  {/* Experience List */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                     {experienceList.map((exp, idx) => (
                       <div
@@ -1682,19 +2030,19 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
                     ))}
                   </div>
 
-                  {/* Proceed to Generation Button */}
+                  {/* Proceed to Step 2 Action */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '16px', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '16px' }}>
                     <button type="button" onClick={() => setDetailsSubTab('education')} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', padding: '10px 18px', borderRadius: '8px', cursor: 'pointer' }}>
                       ← Back
                     </button>
                     <button
                       type="button"
-                      onClick={() => setActiveTab('autopilot')}
+                      onClick={() => setCurrentStep('generate')}
                       className="btn-primary"
                       style={{ padding: '12px 28px', fontSize: '0.95rem' }}
                     >
-                      <Sparkles size={16} />
-                      <span>Proceed to AI Generation →</span>
+                      <span>Proceed to Step 2: Generate</span>
+                      <ArrowRight size={16} />
                     </button>
                   </div>
                 </div>
@@ -1702,9 +2050,11 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
             </div>
           )}
 
-          {/* STEP 2: GENERATE PORTFOLIO (AI AUTOPILOT) */}
-          {activeTab === 'autopilot' && (
-            <div style={{ maxWidth: '760px', margin: '0 auto' }}>
+          {/* ========================================================================= */}
+          {/* STEP 2: GENERATE (AI SYNTHESIS & AUDIT) */}
+          {/* ========================================================================= */}
+          {currentStep === 'generate' && (
+            <div style={{ maxWidth: '780px', margin: '0 auto' }}>
               <div style={{ marginBottom: '24px', textAlign: 'center' }}>
                 <div
                   style={{
@@ -1725,7 +2075,7 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
                   <span>
                     {serverHealth?.hasOpenAiKey
                       ? `OPENAI INTEGRATION // ${serverHealth.model.toUpperCase()} // STRICT ANTI-HALLUCINATION`
-                      : 'OFFLINE FACT-GOVERNED AI // ZERO HALLUCINATION'}
+                      : 'OFFLINE HEURISTIC SYNTHESIS // ZERO HALLUCINATION'}
                   </span>
                 </div>
                 <h3
@@ -1740,107 +2090,165 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
                   Generate Your Tailored 3D Portfolio
                 </h3>
                 <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', lineHeight: 1.5 }}>
-                  Active Discipline: <strong style={{ color: 'var(--accent-cyan)' }}>{activeDiscipline.label}</strong> ({autopilotRole.toUpperCase()})
+                  Active Discipline: <strong style={{ color: 'var(--accent-cyan)' }}>{activeDiscipline.label}</strong> • Persona: <strong style={{ color: 'var(--accent-cyan)' }}>{autopilotRole.toUpperCase()}</strong>
                 </p>
               </div>
 
-              {/* Generation Meta Outcome Banner */}
-              {generationMeta && (
+              {/* Error State Banner */}
+              {generationError && (
+                <div className="error-banner" style={{ marginBottom: '20px' }}>
+                  <AlertCircle size={20} color="#ff0055" style={{ flexShrink: 0, marginTop: '2px' }} />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 700, marginBottom: '2px' }}>Generation Failure</div>
+                    <div>{generationError}</div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleRunAutopilot()}
+                    className="btn-primary"
+                    style={{ padding: '6px 14px', fontSize: '0.78rem' }}
+                  >
+                    Retry
+                  </button>
+                </div>
+              )}
+
+              {/* Streaming Progress & Skeleton Shimmer Loader (When Generating) */}
+              {isGenerating && (
+                <div style={{ padding: '32px 20px', textAlign: 'center', marginBottom: '28px' }}>
+                  <div className="stepper-circle active" style={{ width: '48px', height: '48px', margin: '0 auto 16px' }}>
+                    <Sparkles size={22} color="#000" />
+                  </div>
+                  <h4 style={{ color: '#fff', fontSize: '1.25rem', marginBottom: '8px' }}>
+                    Synthesizing 3D Portfolio
+                  </h4>
+                  <p style={{ color: 'var(--accent-cyan)', fontFamily: 'var(--font-mono)', fontSize: '0.85rem', marginBottom: '20px' }}>
+                    {generationStep || 'Processing domain knowledge...'}
+                  </p>
+
+                  {/* Streaming Progress Bar */}
+                  <div
+                    style={{
+                      width: '100%',
+                      maxWidth: '480px',
+                      height: '8px',
+                      background: 'rgba(255, 255, 255, 0.08)',
+                      borderRadius: '999px',
+                      margin: '0 auto 32px',
+                      overflow: 'hidden',
+                    }}
+                  >
+                    <div
+                      style={{
+                        height: '100%',
+                        width: `${streamProgress}%`,
+                        background: 'linear-gradient(90deg, var(--accent-cyan), var(--accent-magenta))',
+                        borderRadius: '999px',
+                        transition: 'width 0.4s ease',
+                      }}
+                    />
+                  </div>
+
+                  {/* Skeleton Shimmer Layout */}
+                  <div style={{ maxWidth: '640px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                    <div className="skeleton-box skeleton-shimmer" style={{ height: '36px', width: '50%', margin: '0 auto' }} />
+                    <div className="skeleton-box skeleton-shimmer" style={{ height: '18px', width: '75%', margin: '0 auto' }} />
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px', marginTop: '12px' }}>
+                      <div className="skeleton-box skeleton-shimmer" style={{ height: '84px' }} />
+                      <div className="skeleton-box skeleton-shimmer" style={{ height: '84px' }} />
+                      <div className="skeleton-box skeleton-shimmer" style={{ height: '84px' }} />
+                    </div>
+                    <div className="skeleton-box skeleton-shimmer" style={{ height: '110px', marginTop: '6px' }} />
+                  </div>
+                </div>
+              )}
+
+              {/* Generation Meta Outcome & Anti-Hallucination Gap Alerts */}
+              {!isGenerating && generationMeta && (
                 <div
                   style={{
-                    padding: '16px 20px',
+                    padding: '20px',
                     borderRadius: '12px',
                     background: generationMeta.liveAi ? 'rgba(0, 242, 254, 0.08)' : 'rgba(255, 170, 0, 0.08)',
                     border: generationMeta.liveAi ? '1px solid rgba(0, 242, 254, 0.3)' : '1px solid rgba(255, 170, 0, 0.3)',
                     marginBottom: '24px',
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-                    <CheckCircle2 size={16} color={generationMeta.liveAi ? '#00f2fe' : '#ffaa00'} />
-                    <span style={{ fontWeight: 700, color: '#fff', fontSize: '0.88rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                    <CheckCircle2 size={18} color={generationMeta.liveAi ? '#00f2fe' : '#ffaa00'} />
+                    <span style={{ fontWeight: 700, color: '#fff', fontSize: '0.95rem' }}>
                       {generationMeta.message}
                     </span>
                   </div>
+
+                  {/* Anti-Hallucination Gap Warnings */}
                   {generationMeta.suggestions && generationMeta.suggestions.length > 0 && (
-                    <ul style={{ paddingLeft: '20px', fontSize: '0.8rem', color: 'rgba(255, 255, 255, 0.7)', marginTop: '6px' }}>
-                      {generationMeta.suggestions.map((s, i) => (
-                        <li key={i}>{s}</li>
-                      ))}
-                    </ul>
+                    <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid rgba(255, 255, 255, 0.08)' }}>
+                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: '#ffaa00', marginBottom: '6px' }}>
+                        ANTI-HALLUCINATION AUDIT // IDENTIFIED FACT GAPS:
+                      </div>
+                      <ul style={{ paddingLeft: '20px', fontSize: '0.8rem', color: 'rgba(255, 255, 255, 0.8)', lineHeight: 1.6 }}>
+                        {generationMeta.suggestions.map((s, i) => (
+                          <li key={i}>{s}</li>
+                        ))}
+                      </ul>
+                    </div>
                   )}
                 </div>
               )}
 
-              {/* Error Message */}
-              {generationError && (
+              {/* Ready to Synthesize Summary Card */}
+              {!isGenerating && (
                 <div
                   style={{
-                    padding: '14px 18px',
-                    borderRadius: '10px',
-                    background: 'rgba(255, 0, 85, 0.1)',
-                    border: '1px solid rgba(255, 0, 85, 0.3)',
-                    color: '#ff8899',
-                    fontSize: '0.85rem',
-                    marginBottom: '20px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '10px',
+                    padding: '22px',
+                    borderRadius: '12px',
+                    background: 'rgba(255, 255, 255, 0.03)',
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    marginBottom: '24px',
                   }}
                 >
-                  <AlertCircle size={16} />
-                  <span>{generationError}</span>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px', fontSize: '0.85rem' }}>
+                    <div>
+                      <span style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', fontSize: '0.72rem' }}>NAME: </span>
+                      <strong style={{ color: '#fff' }}>{autopilotName || 'Alex Chen'}</strong>
+                    </div>
+                    <div>
+                      <span style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', fontSize: '0.72rem' }}>DISCIPLINE: </span>
+                      <strong style={{ color: 'var(--accent-cyan)' }}>{activeDiscipline.shortName}</strong>
+                    </div>
+                    <div>
+                      <span style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', fontSize: '0.72rem' }}>PERSONA: </span>
+                      <strong style={{ color: '#fff' }}>{autopilotRole.toUpperCase()}</strong>
+                    </div>
+                    <div>
+                      <span style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', fontSize: '0.72rem' }}>VERIFIED PROJECTS: </span>
+                      <strong style={{ color: '#fff' }}>{projectsList.filter((p) => !p.isAiIdea).length} Projects</strong>
+                    </div>
+                  </div>
                 </div>
               )}
 
-              {/* Summary Card of Input Data */}
-              <div
-                style={{
-                  padding: '20px',
-                  borderRadius: '12px',
-                  background: 'rgba(255, 255, 255, 0.03)',
-                  border: '1px solid rgba(255, 255, 255, 0.1)',
-                  marginBottom: '24px',
-                }}
-              >
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '14px', fontSize: '0.85rem' }}>
-                  <div>
-                    <span style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', fontSize: '0.72rem' }}>NAME: </span>
-                    <strong style={{ color: '#fff' }}>{autopilotName || 'Alex Chen'}</strong>
-                  </div>
-                  <div>
-                    <span style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', fontSize: '0.72rem' }}>BRANCH: </span>
-                    <strong style={{ color: 'var(--accent-cyan)' }}>{activeDiscipline.shortName}</strong>
-                  </div>
-                  <div>
-                    <span style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', fontSize: '0.72rem' }}>ROLE: </span>
-                    <strong style={{ color: '#fff' }}>{autopilotRole.toUpperCase()}</strong>
-                  </div>
-                  <div>
-                    <span style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', fontSize: '0.72rem' }}>VERIFIED PROJECTS: </span>
-                    <strong style={{ color: '#fff' }}>{projectsList.filter(p => !p.isAiIdea).length} Projects</strong>
-                  </div>
-                </div>
-              </div>
+              {/* Primary Action Button */}
+              {!isGenerating && (
+                <button
+                  type="button"
+                  onClick={() => handleRunAutopilot()}
+                  className="btn-primary"
+                  style={{
+                    width: '100%',
+                    padding: '18px',
+                    fontSize: '1.05rem',
+                    justifyContent: 'center',
+                    marginBottom: '28px',
+                  }}
+                >
+                  <Sparkles size={20} />
+                  <span>GENERATE {activeDiscipline.shortName.toUpperCase()} 3D PORTFOLIO</span>
+                </button>
+              )}
 
-              {/* Generate Trigger Button */}
-              <button
-                type="button"
-                onClick={() => handleRunAutopilot()}
-                disabled={isGenerating}
-                className="btn-primary"
-                style={{
-                  width: '100%',
-                  padding: '18px',
-                  fontSize: '1.05rem',
-                  justifyContent: 'center',
-                  marginBottom: '28px',
-                }}
-              >
-                <Sparkles size={20} />
-                <span>{isGenerating ? (generationStep || 'GENERATING 3D PORTFOLIO...') : `GENERATE ${activeDiscipline.shortName.toUpperCase()} PORTFOLIO`}</span>
-              </button>
-
-              {/* DISCIPLINE CAREER RECOMMENDATIONS */}
+              {/* Career & Portfolio Recommendations */}
               <div
                 style={{
                   padding: '20px',
@@ -1853,18 +2261,22 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
                   <Lightbulb size={16} color="var(--accent-cyan)" />
                   <span style={{ fontFamily: 'var(--font-heading)', fontWeight: 700, color: '#fff', fontSize: '0.95rem' }}>
-                    Career & Portfolio Recommendations for {activeDiscipline.label}:
+                    Recommended Standards for {activeDiscipline.label}:
                   </span>
                 </div>
                 <ul style={{ paddingLeft: '20px', fontSize: '0.82rem', color: 'rgba(255, 255, 255, 0.8)', lineHeight: 1.6 }}>
-                  {(portfolio.careerRecommendations || activeDiscipline.careerRecommendations).map((rec, i) => (
+                  {(portfolio.careerRecommendations || [
+                    `Quantify engineering trade-offs using ${activeDiscipline.shortName} domain metrics.`,
+                    'Provide clear schematics, CAD models, or architecture diagrams for major capstones.',
+                    'Anchor project claims with measurable efficiency or benchmark outcomes.',
+                  ]).map((rec, i) => (
                     <li key={i}>{rec}</li>
                   ))}
                 </ul>
               </div>
 
-              {/* AI SUGGESTED PROJECTS PANEL */}
-              {projectsList.some(p => p.isAiIdea) && (
+              {/* Suggested AI Project Concepts */}
+              {projectsList.some((p) => p.isAiIdea) && (
                 <div
                   style={{
                     padding: '20px',
@@ -1877,11 +2289,11 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
                     <Sparkles size={16} color="var(--accent-magenta)" />
                     <span style={{ fontFamily: 'var(--font-heading)', fontWeight: 700, color: '#fff', fontSize: '0.95rem' }}>
-                      AI Concept Suggestions (Identified Separately)
+                      AI Suggested Milestones (Flagged Separately)
                     </span>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                    {projectsList.filter(p => p.isAiIdea).map((idea) => (
+                    {projectsList.filter((p) => p.isAiIdea).map((idea) => (
                       <div
                         key={idea.id}
                         style={{
@@ -1927,663 +2339,688 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
                 </div>
               )}
 
-              {/* Next Navigation */}
+              {/* Navigation between steps */}
               <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '16px' }}>
-                <button type="button" onClick={() => setActiveTab('details')} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', padding: '10px 18px', borderRadius: '8px', cursor: 'pointer' }}>
+                <button
+                  type="button"
+                  onClick={() => setCurrentStep('details')}
+                  style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', padding: '10px 18px', borderRadius: '8px', cursor: 'pointer' }}
+                >
                   ← Edit Details
                 </button>
-                <button type="button" onClick={() => setActiveTab('sections')} className="btn-primary" style={{ padding: '10px 24px' }}>
-                  Next: Customize & Tone Rewriter →
+                <button
+                  type="button"
+                  onClick={() => setCurrentStep('customize')}
+                  className="btn-primary"
+                  style={{ padding: '10px 24px' }}
+                >
+                  <span>Next: Customize & Polish</span>
+                  <ArrowRight size={16} />
                 </button>
               </div>
             </div>
           )}
 
-          {/* STEP 3: SECTIONS & AI REWRITER */}
-          {activeTab === 'sections' && (
-            <div style={{ maxWidth: '820px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '32px' }}>
-              {/* SECTION A: AI ROLE RECOMMENDATIONS */}
+          {/* ========================================================================= */}
+          {/* STEP 3: CUSTOMIZE (SECTIONS, TONES, THEMES, CHAT) */}
+          {/* ========================================================================= */}
+          {currentStep === 'customize' && (
+            <div style={{ maxWidth: '840px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+              {/* Customize Sub-Tabs */}
               <div
                 style={{
-                  padding: '24px',
-                  borderRadius: '14px',
-                  background: 'rgba(0, 242, 254, 0.04)',
-                  border: '1px solid rgba(0, 242, 254, 0.2)',
+                  display: 'flex',
+                  gap: '8px',
+                  borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+                  paddingBottom: '10px',
                 }}
               >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-                  <div>
-                    <h4 style={{ fontFamily: 'var(--font-heading)', color: '#fff', fontSize: '1.2rem', marginBottom: '4px' }}>
-                      AI Role Recommendations & Section Optimizer
-                    </h4>
-                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.82rem' }}>
-                      Evaluates your profile against standard hiring expectations for a <strong>{portfolio.role.toUpperCase()}</strong>.
-                    </p>
-                  </div>
-                  <button
-                    onClick={handleFetchRecommendations}
-                    disabled={isFetchingRecs}
-                    className="btn-primary"
-                    style={{ padding: '10px 18px', fontSize: '0.82rem' }}
-                  >
-                    <Wand2 size={15} />
-                    <span>{isFetchingRecs ? 'Analyzing...' : 'Analyze My Role'}</span>
-                  </button>
-                </div>
-
-                {recommendations && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginTop: '12px' }}>
-                    <div>
-                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--accent-cyan)', marginBottom: '6px' }}>
-                        RECOMMENDED SECTION PRIORITY ORDER:
-                      </div>
-                      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                        {recommendations.priorityOrder.map((sec, idx) => (
-                          <span
-                            key={sec}
-                            style={{
-                              padding: '4px 10px',
-                              borderRadius: '6px',
-                              background: 'rgba(255, 255, 255, 0.06)',
-                              border: '1px solid rgba(255, 255, 255, 0.12)',
-                              fontSize: '0.75rem',
-                              fontFamily: 'var(--font-mono)',
-                              color: '#fff',
-                            }}
-                          >
-                            {idx + 1}. {sec.toUpperCase()}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div>
-                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--accent-magenta)', marginBottom: '4px' }}>
-                        IMPROVEMENT SUGGESTIONS:
-                      </div>
-                      <ul style={{ paddingLeft: '18px', fontSize: '0.82rem', color: 'rgba(255, 255, 255, 0.75)' }}>
-                        {recommendations.improvementSuggestions.map((s, i) => (
-                          <li key={i}>{s}</li>
-                        ))}
-                      </ul>
-                    </div>
-
+                {[
+                  { id: 'sections' as const, label: 'Section Hierarchy & Toggles', icon: Layers },
+                  { id: 'rewriter' as const, label: 'AI Tone Rewriter', icon: Wand2 },
+                  { id: 'themes' as const, label: 'Visual Themes & 3D Hero', icon: Palette },
+                  { id: 'chat' as const, label: 'Co-Pilot Chat Assistant', icon: MessageSquare },
+                ].map((st) => {
+                  const Icon = st.icon;
+                  const active = customizeSubTab === st.id;
+                  return (
                     <button
-                      onClick={handleApplyRecommendations}
-                      className="btn-primary"
-                      style={{ alignSelf: 'flex-start', padding: '8px 16px', fontSize: '0.8rem' }}
+                      key={st.id}
+                      onClick={() => setCustomizeSubTab(st.id)}
+                      style={{
+                        padding: '8px 14px',
+                        borderRadius: '6px',
+                        background: active ? 'var(--accent-cyan)' : 'rgba(255, 255, 255, 0.05)',
+                        color: active ? '#000' : '#fff',
+                        border: 'none',
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: '0.78rem',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                      }}
                     >
-                      <Check size={14} />
-                      <span>Apply AI Section Order & Visibility</span>
+                      <Icon size={13} />
+                      <span>{st.label}</span>
                     </button>
-                  </div>
-                )}
+                  );
+                })}
               </div>
 
-              {/* SECTION B: REGENERATE SECTION IN CHOSEN TONE */}
-              <div
-                style={{
-                  padding: '24px',
-                  borderRadius: '14px',
-                  background: 'rgba(255, 255, 255, 0.02)',
-                  border: '1px solid rgba(255, 255, 255, 0.1)',
-                }}
-              >
-                <h4 style={{ fontFamily: 'var(--font-heading)', color: '#fff', fontSize: '1.2rem', marginBottom: '6px' }}>
-                  Regenerate Section in a Chosen Tone
-                </h4>
-                <p style={{ color: 'var(--text-secondary)', fontSize: '0.82rem', marginBottom: '16px' }}>
-                  Rewrite your headline, bio, or target role in a distinct tone without manual editing.
-                </p>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '14px' }}>
-                  <div>
-                    <label style={{ display: 'block', fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--accent-cyan)', marginBottom: '6px' }}>
-                      TARGET FIELD
-                    </label>
-                    <select
-                      value={rewriteTarget}
-                      onChange={(e) => setRewriteTarget(e.target.value as any)}
-                      style={{
-                        width: '100%',
-                        padding: '10px 14px',
-                        background: '#04070d',
-                        border: '1px solid rgba(255, 255, 255, 0.15)',
-                        borderRadius: '8px',
-                        color: '#fff',
-                        fontFamily: 'var(--font-body)',
-                        fontSize: '0.9rem',
-                        outline: 'none',
-                      }}
-                    >
-                      <option value="tagline">Tagline / Headline</option>
-                      <option value="shortBio">Short Bio (Hero Summary)</option>
-                      <option value="fullBio">Full Biography (About Section)</option>
-                      <option value="targetRole">Target Role Headline</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label style={{ display: 'block', fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--accent-cyan)', marginBottom: '6px' }}>
-                      WRITING TONE
-                    </label>
-                    <select
-                      value={rewriteTone}
-                      onChange={(e) => setRewriteTone(e.target.value as any)}
-                      style={{
-                        width: '100%',
-                        padding: '10px 14px',
-                        background: '#04070d',
-                        border: '1px solid rgba(255, 255, 255, 0.15)',
-                        borderRadius: '8px',
-                        color: '#fff',
-                        fontFamily: 'var(--font-body)',
-                        fontSize: '0.9rem',
-                        outline: 'none',
-                      }}
-                    >
-                      <option value="professional">Professional (Executive & Authoritative)</option>
-                      <option value="impactful">Impactful (Outcome-Driven & High Benchmark)</option>
-                      <option value="concise">Concise (Crisp & Zero Fluff)</option>
-                      <option value="technical">Technical (Rigorous Engineering Terminology)</option>
-                      <option value="creative">Creative (Evocative & Distinctive)</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div style={{ marginBottom: '14px' }}>
-                  <label style={{ display: 'block', fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'rgba(255,255,255,0.6)', marginBottom: '6px' }}>
-                    OPTIONAL GUIDANCE (e.g., "Emphasize SolidWorks CAD and FEA simulation")
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Custom instruction..."
-                    value={rewriteCustomInstruction}
-                    onChange={(e) => setRewriteCustomInstruction(e.target.value)}
-                    style={{
-                      width: '100%',
-                      padding: '10px 14px',
-                      background: '#04070d',
-                      border: '1px solid rgba(255, 255, 255, 0.15)',
-                      borderRadius: '8px',
-                      color: '#fff',
-                      fontSize: '0.9rem',
-                      outline: 'none',
-                    }}
-                  />
-                </div>
-
-                <button
-                  onClick={handleRewriteSection}
-                  disabled={isRewriting}
-                  className="btn-primary"
-                  style={{ padding: '10px 20px', fontSize: '0.85rem' }}
-                >
-                  <RefreshCw size={14} />
-                  <span>{isRewriting ? 'Rewriting with AI...' : 'Rewrite Section'}</span>
-                </button>
-
-                {/* Proposed Rewrite Diff */}
-                {pendingRewrite && (
+              {/* SUB-SECTION A: SECTIONS & REORDERING */}
+              {customizeSubTab === 'sections' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                  {/* AI Section Recommendation Helper */}
                   <div
                     style={{
-                      marginTop: '16px',
-                      padding: '16px',
-                      borderRadius: '10px',
-                      background: 'rgba(0, 242, 254, 0.08)',
-                      border: '1px solid var(--accent-cyan)',
+                      padding: '20px',
+                      borderRadius: '12px',
+                      background: 'rgba(0, 242, 254, 0.04)',
+                      border: '1px solid rgba(0, 242, 254, 0.2)',
                     }}
                   >
-                    <div style={{ fontWeight: 700, fontSize: '0.88rem', color: '#fff', marginBottom: '8px' }}>
-                      Proposed Rewritten {pendingRewrite.section}:
-                    </div>
-                    <div
-                      style={{
-                        padding: '12px',
-                        borderRadius: '8px',
-                        background: '#030508',
-                        color: 'var(--accent-cyan)',
-                        fontFamily: 'var(--font-mono)',
-                        fontSize: '0.85rem',
-                        marginBottom: '12px',
-                      }}
-                    >
-                      "{pendingRewrite.rewritten}"
-                    </div>
-                    <div style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.6)', marginBottom: '12px' }}>
-                      {pendingRewrite.explanation}
-                    </div>
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      <button onClick={handleAcceptRewrite} className="btn-primary" style={{ padding: '6px 14px', fontSize: '0.78rem' }}>
-                        <Check size={14} />
-                        <span>Accept & Apply to Portfolio</span>
-                      </button>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        <h5 style={{ fontFamily: 'var(--font-heading)', color: '#fff', fontSize: '1rem', marginBottom: '2px' }}>
+                          Persona Section Recommendation
+                        </h5>
+                        <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', margin: 0 }}>
+                          Tailored for <strong>{portfolio.role.toUpperCase()}</strong>: {activeDiscipline.personaSectionEmphasis[portfolio.persona as Persona]?.join(' → ') || 'Standard Layout'}
+                        </p>
+                      </div>
                       <button
-                        onClick={() => setPendingRewrite(null)}
-                        style={{
-                          background: 'transparent',
-                          border: '1px solid rgba(255,255,255,0.2)',
-                          color: '#fff',
-                          borderRadius: '6px',
-                          padding: '6px 12px',
-                          fontSize: '0.78rem',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* SECTION C: REORDER & VISIBILITY TOGGLES */}
-              <div>
-                <h4 style={{ fontFamily: 'var(--font-heading)', color: '#fff', fontSize: '1.2rem', marginBottom: '8px' }}>
-                  Manual Section Reordering & Toggles
-                </h4>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  {(() => {
-                    const defaultOrder: Array<keyof PortfolioData['sectionVisibility']> = [
-                      'hero',
-                      'welcome',
-                      'about',
-                      'projects',
-                      'experience',
-                      'services',
-                      'publications',
-                      'certifications',
-                      'contact',
-                    ];
-                    const activeOrder = (portfolio.sectionOrder as Array<keyof PortfolioData['sectionVisibility']>) || defaultOrder;
-                    return activeOrder.map((secKey, idx) => {
-                      const visible = portfolio.sectionVisibility[secKey] ?? true;
-                      return (
-                        <div
-                          key={secKey}
-                          style={{
-                            padding: '12px 18px',
-                            borderRadius: '10px',
-                            background: 'rgba(255, 255, 255, 0.03)',
-                            border: '1px solid rgba(255, 255, 255, 0.08)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            gap: '12px',
-                          }}
-                        >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                            <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--accent-cyan)', width: '20px' }}>
-                              #{idx + 1}
-                            </span>
-                            <span style={{ textTransform: 'uppercase', fontFamily: 'var(--font-mono)', fontSize: '0.85rem', color: '#fff' }}>
-                              {secKey} SECTION
-                            </span>
-                          </div>
-
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <button
-                              disabled={idx === 0}
-                              onClick={() => {
-                                const newOrder = [...activeOrder];
-                                const temp = newOrder[idx - 1];
-                                newOrder[idx - 1] = newOrder[idx];
-                                newOrder[idx] = temp;
-                                const updated = { ...portfolio, sectionOrder: newOrder };
-                                setHistory((prev) => [...prev, updated]);
-                                setFuture([]);
-                                onUpdatePortfolio(updated);
-                              }}
-                              style={{
-                                background: idx === 0 ? 'transparent' : 'rgba(255, 255, 255, 0.06)',
-                                border: '1px solid rgba(255, 255, 255, 0.1)',
-                                color: idx === 0 ? 'rgba(255, 255, 255, 0.2)' : '#ffffff',
-                                borderRadius: '6px',
-                                padding: '6px 10px',
-                                cursor: idx === 0 ? 'not-allowed' : 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '4px',
-                                fontSize: '0.72rem',
-                                fontFamily: 'var(--font-mono)',
-                              }}
-                            >
-                              <ArrowUp size={12} />
-                              <span>UP</span>
-                            </button>
-
-                            <button
-                              disabled={idx === activeOrder.length - 1}
-                              onClick={() => {
-                                const newOrder = [...activeOrder];
-                                const temp = newOrder[idx + 1];
-                                newOrder[idx + 1] = newOrder[idx];
-                                newOrder[idx] = temp;
-                                const updated = { ...portfolio, sectionOrder: newOrder };
-                                setHistory((prev) => [...prev, updated]);
-                                setFuture([]);
-                                onUpdatePortfolio(updated);
-                              }}
-                              style={{
-                                background: idx === activeOrder.length - 1 ? 'transparent' : 'rgba(255, 255, 255, 0.06)',
-                                border: '1px solid rgba(255, 255, 255, 0.1)',
-                                color: idx === activeOrder.length - 1 ? 'rgba(255, 255, 255, 0.2)' : '#ffffff',
-                                borderRadius: '6px',
-                                padding: '6px 10px',
-                                cursor: idx === activeOrder.length - 1 ? 'not-allowed' : 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '4px',
-                                fontSize: '0.72rem',
-                                fontFamily: 'var(--font-mono)',
-                              }}
-                            >
-                              <ArrowDown size={12} />
-                              <span>DOWN</span>
-                            </button>
-
-                            <button
-                              onClick={() => {
-                                const updated = {
-                                  ...portfolio,
-                                  sectionVisibility: {
-                                    ...portfolio.sectionVisibility,
-                                    [secKey]: !visible,
-                                  },
-                                };
-                                setHistory((prev) => [...prev, updated]);
-                                setFuture([]);
-                                onUpdatePortfolio(updated);
-                              }}
-                              style={{
-                                background: visible ? 'rgba(0, 242, 254, 0.12)' : 'rgba(255, 255, 255, 0.03)',
-                                border: visible ? '1px solid var(--accent-cyan)' : '1px solid rgba(255, 255, 255, 0.1)',
-                                color: visible ? 'var(--accent-cyan)' : 'rgba(255, 255, 255, 0.3)',
-                                borderRadius: '6px',
-                                padding: '6px 10px',
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '6px',
-                                fontSize: '0.72rem',
-                                fontFamily: 'var(--font-mono)',
-                              }}
-                            >
-                              {visible ? <Eye size={12} /> : <EyeOff size={12} />}
-                              <span>{visible ? 'VISIBLE' : 'HIDDEN'}</span>
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    });
-                  })()}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* TAB 4: CONVERSATIONAL ASSISTANT & CO-PILOT */}
-          {activeTab === 'chat' && (
-            <div style={{ display: 'flex', flexDirection: 'column', height: '100%', maxWidth: '840px', margin: '0 auto' }}>
-              <div style={{ marginBottom: '16px' }}>
-                <h4 style={{ fontFamily: 'var(--font-heading)', color: '#fff', fontSize: '1.25rem', marginBottom: '6px' }}>
-                  AI Conversational Co-Pilot
-                </h4>
-                <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
-                  Ask the Co-Pilot to adjust your tone, reorder projects, tweak your visual theme, or rewrite sections.
-                </p>
-              </div>
-
-              {/* Quick Instruction Pills tailored to discipline */}
-              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '14px' }}>
-                {[
-                  `Make my headline focus on ${activeDiscipline.shortName}`,
-                  'Make my summary more punchy and concise',
-                  'Prioritize my verified technical projects',
-                  'Recommend missing sections for my role',
-                  'Switch theme to Obsidian Stealth',
-                ].map((pill, i) => (
-                  <button
-                    key={i}
-                    onClick={() => handleSendChatMessage(undefined, pill)}
-                    style={{
-                      background: 'rgba(255, 255, 255, 0.04)',
-                      border: '1px solid rgba(255, 255, 255, 0.12)',
-                      borderRadius: '999px',
-                      padding: '6px 12px',
-                      color: 'rgba(255, 255, 255, 0.8)',
-                      fontFamily: 'var(--font-mono)',
-                      fontSize: '0.72rem',
-                      cursor: 'pointer',
-                      transition: 'all 0.2s ease',
-                    }}
-                  >
-                    + {pill}
-                  </button>
-                ))}
-              </div>
-
-              {/* Proposed Mutation Diff Banner */}
-              {pendingChatProfile && (
-                <div
-                  style={{
-                    padding: '16px 20px',
-                    borderRadius: '12px',
-                    background: 'rgba(0, 242, 254, 0.1)',
-                    border: '1px solid var(--accent-cyan)',
-                    marginBottom: '16px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '10px',
-                  }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div style={{ fontWeight: 700, color: '#fff', fontSize: '0.9rem' }}>
-                      Proposed Changes: {pendingChatProfile.summary}
-                    </div>
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      <button
-                        onClick={handleAcceptChatProposal}
+                        onClick={handleFetchRecommendations}
+                        disabled={isFetchingRecs}
                         className="btn-primary"
-                        style={{ padding: '6px 14px', fontSize: '0.78rem' }}
+                        style={{ padding: '8px 16px', fontSize: '0.8rem' }}
                       >
-                        <Check size={14} />
-                        <span>Accept Changes</span>
-                      </button>
-                      <button
-                        onClick={handleDiscardChatProposal}
-                        style={{
-                          background: 'transparent',
-                          border: '1px solid rgba(255, 255, 255, 0.2)',
-                          color: '#fff',
-                          borderRadius: '6px',
-                          padding: '6px 12px',
-                          fontSize: '0.78rem',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        Discard
+                        <Wand2 size={14} />
+                        <span>{isFetchingRecs ? 'Analyzing...' : 'Audit Hierarchy'}</span>
                       </button>
                     </div>
+
+                    {recommendations && (
+                      <div style={{ marginTop: '14px', paddingTop: '12px', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '10px' }}>
+                          {recommendations.priorityOrder.map((sec, idx) => (
+                            <span
+                              key={sec}
+                              style={{
+                                padding: '4px 8px',
+                                borderRadius: '4px',
+                                background: 'rgba(255, 255, 255, 0.06)',
+                                fontSize: '0.72rem',
+                                fontFamily: 'var(--font-mono)',
+                                color: '#fff',
+                              }}
+                            >
+                              {idx + 1}. {sec.toUpperCase()}
+                            </span>
+                          ))}
+                        </div>
+                        <button
+                          onClick={handleApplyRecommendations}
+                          className="btn-primary"
+                          style={{ padding: '6px 12px', fontSize: '0.78rem' }}
+                        >
+                          <Check size={12} />
+                          <span>Apply Recommended Order</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
-                  <div style={{ fontSize: '0.82rem', color: 'rgba(255, 255, 255, 0.75)' }}>
-                    {pendingChatProfile.explanation}
+
+                  {/* Manual Section Reordering List */}
+                  <div>
+                    <h5 style={{ fontFamily: 'var(--font-heading)', color: '#fff', fontSize: '1.05rem', marginBottom: '12px' }}>
+                      Reorder Sections & Toggle Visibility
+                    </h5>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      {(() => {
+                        const defaultOrder: Array<keyof PortfolioData['sectionVisibility']> = [
+                          'hero', 'welcome', 'about', 'skills', 'projects', 'experience', 'education', 'certifications', 'publications', 'services', 'testimonials', 'contact'
+                        ];
+                        const activeOrder = (portfolio.sectionOrder as Array<keyof PortfolioData['sectionVisibility']>) || defaultOrder;
+                        return activeOrder.map((secKey, idx) => {
+                          const visible = portfolio.sectionVisibility[secKey] ?? true;
+                          return (
+                            <div
+                              key={secKey}
+                              style={{
+                                padding: '12px 18px',
+                                borderRadius: '8px',
+                                background: 'rgba(255, 255, 255, 0.03)',
+                                border: '1px solid rgba(255, 255, 255, 0.08)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                              }}
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--accent-cyan)', width: '22px' }}>
+                                  #{idx + 1}
+                                </span>
+                                <span style={{ textTransform: 'uppercase', fontFamily: 'var(--font-mono)', fontSize: '0.85rem', color: '#fff' }}>
+                                  {secKey} SECTION
+                                </span>
+                              </div>
+
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <button
+                                  disabled={idx === 0}
+                                  onClick={() => {
+                                    const newOrder = [...activeOrder];
+                                    const temp = newOrder[idx - 1];
+                                    newOrder[idx - 1] = newOrder[idx];
+                                    newOrder[idx] = temp;
+                                    const updated = { ...portfolio, sectionOrder: newOrder };
+                                    setHistory((prev) => [...prev, updated]);
+                                    setFuture([]);
+                                    onUpdatePortfolio(updated);
+                                  }}
+                                  style={{
+                                    background: idx === 0 ? 'transparent' : 'rgba(255, 255, 255, 0.06)',
+                                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                                    color: idx === 0 ? 'rgba(255, 255, 255, 0.2)' : '#ffffff',
+                                    borderRadius: '6px',
+                                    padding: '6px 10px',
+                                    cursor: idx === 0 ? 'not-allowed' : 'pointer',
+                                    fontSize: '0.72rem',
+                                    fontFamily: 'var(--font-mono)',
+                                  }}
+                                >
+                                  <ArrowUp size={12} />
+                                </button>
+
+                                <button
+                                  disabled={idx === activeOrder.length - 1}
+                                  onClick={() => {
+                                    const newOrder = [...activeOrder];
+                                    const temp = newOrder[idx + 1];
+                                    newOrder[idx + 1] = newOrder[idx];
+                                    newOrder[idx] = temp;
+                                    const updated = { ...portfolio, sectionOrder: newOrder };
+                                    setHistory((prev) => [...prev, updated]);
+                                    setFuture([]);
+                                    onUpdatePortfolio(updated);
+                                  }}
+                                  style={{
+                                    background: idx === activeOrder.length - 1 ? 'transparent' : 'rgba(255, 255, 255, 0.06)',
+                                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                                    color: idx === activeOrder.length - 1 ? 'rgba(255, 255, 255, 0.2)' : '#ffffff',
+                                    borderRadius: '6px',
+                                    padding: '6px 10px',
+                                    cursor: idx === activeOrder.length - 1 ? 'not-allowed' : 'pointer',
+                                    fontSize: '0.72rem',
+                                    fontFamily: 'var(--font-mono)',
+                                  }}
+                                >
+                                  <ArrowDown size={12} />
+                                </button>
+
+                                <button
+                                  onClick={() => {
+                                    const updated = {
+                                      ...portfolio,
+                                      sectionVisibility: {
+                                        ...portfolio.sectionVisibility,
+                                        [secKey]: !visible,
+                                      },
+                                    };
+                                    setHistory((prev) => [...prev, updated]);
+                                    setFuture([]);
+                                    onUpdatePortfolio(updated);
+                                  }}
+                                  style={{
+                                    background: visible ? 'rgba(0, 242, 254, 0.12)' : 'rgba(255, 255, 255, 0.03)',
+                                    border: visible ? '1px solid var(--accent-cyan)' : '1px solid rgba(255, 255, 255, 0.1)',
+                                    color: visible ? 'var(--accent-cyan)' : 'rgba(255, 255, 255, 0.3)',
+                                    borderRadius: '6px',
+                                    padding: '6px 10px',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    fontSize: '0.72rem',
+                                    fontFamily: 'var(--font-mono)',
+                                  }}
+                                >
+                                  {visible ? <Eye size={12} /> : <EyeOff size={12} />}
+                                  <span>{visible ? 'VISIBLE' : 'HIDDEN'}</span>
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        });
+                      })()}
+                    </div>
                   </div>
                 </div>
               )}
 
-              {/* Chat Messages */}
-              <div
-                style={{
-                  flex: 1,
-                  minHeight: '320px',
-                  maxHeight: '380px',
-                  overflowY: 'auto',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '14px',
-                  padding: '16px',
-                  background: 'rgba(5, 7, 11, 0.5)',
-                  borderRadius: '12px',
-                  border: '1px solid rgba(255, 255, 255, 0.08)',
-                  marginBottom: '16px',
-                }}
-              >
-                {chatMessages.map((msg, i) => (
+              {/* SUB-SECTION B: AI SECTION REWRITER */}
+              {customizeSubTab === 'rewriter' && (
+                <div
+                  style={{
+                    padding: '24px',
+                    borderRadius: '14px',
+                    background: 'rgba(255, 255, 255, 0.02)',
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                  }}
+                >
+                  <h4 style={{ fontFamily: 'var(--font-heading)', color: '#fff', fontSize: '1.2rem', marginBottom: '6px' }}>
+                    Regenerate Content in a Specific Tone
+                  </h4>
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.82rem', marginBottom: '16px' }}>
+                    Rewrite your tagline, short bio, or full biography without altering your verified facts.
+                  </p>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '14px' }}>
+                    <div>
+                      <label style={{ display: 'block', fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--accent-cyan)', marginBottom: '6px' }}>
+                        TARGET FIELD
+                      </label>
+                      <select
+                        value={rewriteTarget}
+                        onChange={(e) => setRewriteTarget(e.target.value as any)}
+                        style={{
+                          width: '100%',
+                          padding: '10px 14px',
+                          background: '#04070d',
+                          border: '1px solid rgba(255, 255, 255, 0.15)',
+                          borderRadius: '8px',
+                          color: '#fff',
+                          fontFamily: 'var(--font-body)',
+                          fontSize: '0.9rem',
+                          outline: 'none',
+                        }}
+                      >
+                        <option value="tagline">Tagline / Headline</option>
+                        <option value="shortBio">Short Bio (Hero Summary)</option>
+                        <option value="fullBio">Full Biography (About Section)</option>
+                        <option value="targetRole">Target Role Headline</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label style={{ display: 'block', fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--accent-cyan)', marginBottom: '6px' }}>
+                        WRITING TONE
+                      </label>
+                      <select
+                        value={rewriteTone}
+                        onChange={(e) => setRewriteTone(e.target.value as any)}
+                        style={{
+                          width: '100%',
+                          padding: '10px 14px',
+                          background: '#04070d',
+                          border: '1px solid rgba(255, 255, 255, 0.15)',
+                          borderRadius: '8px',
+                          color: '#fff',
+                          fontFamily: 'var(--font-body)',
+                          fontSize: '0.9rem',
+                          outline: 'none',
+                        }}
+                      >
+                        <option value="professional">Professional (Executive & Authoritative)</option>
+                        <option value="impactful">Impactful (Outcome-Driven & High Benchmark)</option>
+                        <option value="concise">Concise (Crisp & Zero Fluff)</option>
+                        <option value="technical">Technical (Rigorous Engineering Terminology)</option>
+                        <option value="creative">Creative (Evocative & Distinctive)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div style={{ marginBottom: '14px' }}>
+                    <label style={{ display: 'block', fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'rgba(255,255,255,0.6)', marginBottom: '6px' }}>
+                      OPTIONAL GUIDANCE (e.g., "Emphasize CAD precision and FEA verification")
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Custom instruction..."
+                      value={rewriteCustomInstruction}
+                      onChange={(e) => setRewriteCustomInstruction(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '10px 14px',
+                        background: '#04070d',
+                        border: '1px solid rgba(255, 255, 255, 0.15)',
+                        borderRadius: '8px',
+                        color: '#fff',
+                        fontSize: '0.9rem',
+                        outline: 'none',
+                      }}
+                    />
+                  </div>
+
+                  <button
+                    onClick={handleRewriteSection}
+                    disabled={isRewriting}
+                    className="btn-primary"
+                    style={{ padding: '10px 20px', fontSize: '0.85rem' }}
+                  >
+                    <RefreshCw size={14} />
+                    <span>{isRewriting ? 'Rewriting with AI...' : 'Rewrite Section'}</span>
+                  </button>
+
+                  {/* Proposed Rewrite Diff */}
+                  {pendingRewrite && (
+                    <div
+                      style={{
+                        marginTop: '16px',
+                        padding: '16px',
+                        borderRadius: '10px',
+                        background: 'rgba(0, 242, 254, 0.08)',
+                        border: '1px solid var(--accent-cyan)',
+                      }}
+                    >
+                      <div style={{ fontWeight: 700, fontSize: '0.88rem', color: '#fff', marginBottom: '8px' }}>
+                        Proposed Rewritten {pendingRewrite.section}:
+                      </div>
+                      <div
+                        style={{
+                          padding: '12px',
+                          borderRadius: '8px',
+                          background: '#030508',
+                          color: 'var(--accent-cyan)',
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: '0.85rem',
+                          marginBottom: '12px',
+                        }}
+                      >
+                        "{pendingRewrite.rewritten}"
+                      </div>
+                      <div style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.6)', marginBottom: '12px' }}>
+                        {pendingRewrite.explanation}
+                      </div>
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <button onClick={handleAcceptRewrite} className="btn-primary" style={{ padding: '6px 14px', fontSize: '0.78rem' }}>
+                          <Check size={14} />
+                          <span>Accept & Apply to Portfolio</span>
+                        </button>
+                        <button
+                          onClick={() => setPendingRewrite(null)}
+                          style={{
+                            background: 'transparent',
+                            border: '1px solid rgba(255,255,255,0.2)',
+                            color: '#fff',
+                            borderRadius: '6px',
+                            padding: '6px 12px',
+                            fontSize: '0.78rem',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* SUB-SECTION C: VISUAL THEMES & 3D HERO */}
+              {customizeSubTab === 'themes' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
+                  <div>
+                    <h5 style={{ fontFamily: 'var(--font-heading)', color: '#fff', fontSize: '1.2rem', marginBottom: '10px' }}>
+                      Cinematic Themes & Color Palettes
+                    </h5>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '14px' }}>
+                      {(Object.keys(THEME_CONFIGS) as ThemePreset[]).map((thm) => {
+                        const cfg = THEME_CONFIGS[thm];
+                        const selected = portfolio.theme === thm;
+                        return (
+                          <div
+                            key={thm}
+                            onClick={() => {
+                              const updated = { ...portfolio, theme: thm };
+                              setHistory((prev) => [...prev, updated]);
+                              setFuture([]);
+                              onUpdatePortfolio(updated);
+                            }}
+                            style={{
+                              padding: '16px',
+                              borderRadius: '10px',
+                              border: selected ? '2px solid var(--accent-cyan)' : '1px solid rgba(255, 255, 255, 0.1)',
+                              background: selected ? 'rgba(0, 242, 254, 0.08)' : 'rgba(255, 255, 255, 0.03)',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: '10px',
+                            }}
+                          >
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <span style={{ fontWeight: 700, color: '#fff', fontSize: '0.9rem' }}>{cfg.name}</span>
+                              {selected && <Check size={16} color="var(--accent-cyan)" />}
+                            </div>
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                              <div style={{ width: '22px', height: '22px', borderRadius: '4px', background: cfg.bgPrimary, border: '1px solid #444' }} />
+                              <div style={{ width: '22px', height: '22px', borderRadius: '4px', background: cfg.accentCyan }} />
+                              <div style={{ width: '22px', height: '22px', borderRadius: '4px', background: cfg.accentMagenta }} />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div>
+                    <h5 style={{ fontFamily: 'var(--font-heading)', color: '#fff', fontSize: '1.2rem', marginBottom: '10px' }}>
+                      Hero 3D Visualization Mode
+                    </h5>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
+                      {[
+                        { id: 'kinetic_360' as const, label: 'Kinetic 360', desc: 'Canvas frame scrubber with cursor tracking' },
+                        { id: 'hologram_core' as const, label: 'Hologram Core', desc: 'Cyan holographic particle core' },
+                        { id: 'cyber_wireframe' as const, label: 'Cyber Grid', desc: 'Minimalist high-contrast tech mesh' },
+                      ].map((mode) => {
+                        const selected = portfolio.hero3DMode === mode.id;
+                        return (
+                          <div
+                            key={mode.id}
+                            onClick={() => {
+                              const updated = { ...portfolio, hero3DMode: mode.id as Hero3DMode };
+                              setHistory((prev) => [...prev, updated]);
+                              setFuture([]);
+                              onUpdatePortfolio(updated);
+                            }}
+                            style={{
+                              padding: '14px',
+                              borderRadius: '8px',
+                              border: selected ? '2px solid var(--accent-cyan)' : '1px solid rgba(255, 255, 255, 0.1)',
+                              background: selected ? 'rgba(0, 242, 254, 0.08)' : 'rgba(255, 255, 255, 0.02)',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            <div style={{ fontWeight: 700, color: selected ? 'var(--accent-cyan)' : '#fff', marginBottom: '4px', fontSize: '0.85rem' }}>
+                              {mode.label}
+                            </div>
+                            <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>{mode.desc}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* SUB-SECTION D: CO-PILOT CHAT ASSISTANT */}
+              {customizeSubTab === 'chat' && (
+                <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+                  {/* Quick Pills */}
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '14px' }}>
+                    {[
+                      `Align portfolio with ${activeDiscipline.shortName} standards`,
+                      'Make full bio more punchy and concise',
+                      'Prioritize verified capstone projects',
+                      'Switch theme to Obsidian Stealth',
+                    ].map((pill, i) => (
+                      <button
+                        key={i}
+                        onClick={() => handleSendChatMessage(undefined, pill)}
+                        style={{
+                          background: 'rgba(255, 255, 255, 0.04)',
+                          border: '1px solid rgba(255, 255, 255, 0.12)',
+                          borderRadius: '999px',
+                          padding: '4px 10px',
+                          color: 'rgba(255, 255, 255, 0.8)',
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: '0.72rem',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        + {pill}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Proposed Mutation Diff Banner */}
+                  {pendingChatProfile && (
+                    <div
+                      style={{
+                        padding: '14px 18px',
+                        borderRadius: '10px',
+                        background: 'rgba(0, 242, 254, 0.1)',
+                        border: '1px solid var(--accent-cyan)',
+                        marginBottom: '14px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '8px',
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{ fontWeight: 700, color: '#fff', fontSize: '0.85rem' }}>
+                          Proposed: {pendingChatProfile.summary}
+                        </div>
+                        <div style={{ display: 'flex', gap: '6px' }}>
+                          <button
+                            onClick={handleAcceptChatProposal}
+                            className="btn-primary"
+                            style={{ padding: '6px 12px', fontSize: '0.75rem' }}
+                          >
+                            <Check size={12} />
+                            <span>Apply</span>
+                          </button>
+                          <button
+                            onClick={handleDiscardChatProposal}
+                            style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', borderRadius: '6px', padding: '6px 10px', fontSize: '0.75rem', cursor: 'pointer' }}
+                          >
+                            Discard
+                          </button>
+                        </div>
+                      </div>
+                      <div style={{ fontSize: '0.78rem', color: 'rgba(255, 255, 255, 0.75)' }}>
+                        {pendingChatProfile.explanation}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Chat Messages Log */}
                   <div
-                    key={i}
                     style={{
-                      alignSelf: msg.sender === 'user' ? 'flex-end' : 'flex-start',
-                      maxWidth: '78%',
-                      padding: '12px 18px',
-                      borderRadius: '12px',
-                      background: msg.sender === 'user' ? 'rgba(0, 242, 254, 0.15)' : 'rgba(255, 255, 255, 0.05)',
-                      border: msg.sender === 'user' ? '1px solid var(--accent-cyan)' : '1px solid rgba(255, 255, 255, 0.1)',
-                      color: '#ffffff',
-                      fontFamily: 'var(--font-body)',
-                      fontSize: '0.9rem',
-                      lineHeight: 1.5,
+                      maxHeight: '340px',
+                      overflowY: 'auto',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '12px',
+                      padding: '14px',
+                      background: 'rgba(5, 7, 11, 0.5)',
+                      borderRadius: '10px',
+                      border: '1px solid rgba(255, 255, 255, 0.08)',
+                      marginBottom: '14px',
                     }}
                   >
-                    <div style={{ marginBottom: '4px', display: 'flex', justifyContent: 'space-between', gap: '8px' }}>
-                      <span
-                        style={{
-                          fontFamily: 'var(--font-mono)',
-                          fontSize: '0.65rem',
-                          color: msg.sender === 'user' ? 'var(--accent-cyan)' : 'var(--accent-magenta)',
-                          textTransform: 'uppercase',
-                        }}
-                      >
-                        {msg.sender === 'user' ? 'You' : `AI Co-Pilot ${msg.liveAi ? '(OpenAI)' : '(Offline)'}`}
-                      </span>
-                      <span style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.4)' }}>{msg.timestamp}</span>
-                    </div>
-                    <div>{msg.text}</div>
-                  </div>
-                ))}
-                {isChatting && (
-                  <div style={{ alignSelf: 'flex-start', color: 'var(--accent-cyan)', fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }}>
-                    AI Co-Pilot is processing instructions...
-                  </div>
-                )}
-              </div>
-
-              {/* Chat Input Bar */}
-              <form onSubmit={handleSendChatMessage} style={{ display: 'flex', gap: '10px' }}>
-                <input
-                  type="text"
-                  placeholder="Enter instruction (e.g. 'Emphasize SolidWorks CAD' or 'Make bio more executive')..."
-                  value={chatInput}
-                  onChange={(e) => setChatInput(e.target.value)}
-                  style={{
-                    flex: 1,
-                    padding: '12px 18px',
-                    background: 'rgba(5, 7, 11, 0.8)',
-                    border: '1px solid rgba(255, 255, 255, 0.15)',
-                    borderRadius: '8px',
-                    color: '#ffffff',
-                    fontFamily: 'var(--font-body)',
-                    fontSize: '0.95rem',
-                    outline: 'none',
-                  }}
-                />
-                <button type="submit" disabled={isChatting} className="btn-primary" style={{ padding: '12px 20px' }}>
-                  <Send size={16} />
-                </button>
-              </form>
-            </div>
-          )}
-
-          {/* TAB 5: VISUAL THEMES & 3D */}
-          {activeTab === 'theme' && (
-            <div style={{ maxWidth: '780px', margin: '0 auto' }}>
-              <div style={{ marginBottom: '28px' }}>
-                <h4 style={{ fontFamily: 'var(--font-heading)', color: '#fff', fontSize: '1.3rem', marginBottom: '8px' }}>
-                  Cinematic Color Palettes
-                </h4>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
-                  {(Object.keys(THEME_CONFIGS) as ThemePreset[]).map((thm) => {
-                    const cfg = THEME_CONFIGS[thm];
-                    const selected = portfolio.theme === thm;
-                    return (
+                    {chatMessages.map((msg, i) => (
                       <div
-                        key={thm}
-                        onClick={() => {
-                          const updated = { ...portfolio, theme: thm };
-                          setHistory((prev) => [...prev, updated]);
-                          setFuture([]);
-                          onUpdatePortfolio(updated);
-                        }}
+                        key={i}
                         style={{
-                          padding: '18px',
-                          borderRadius: '12px',
-                          border: selected ? '2px solid var(--accent-cyan)' : '1px solid rgba(255, 255, 255, 0.1)',
-                          background: selected ? 'rgba(0, 242, 254, 0.08)' : 'rgba(255, 255, 255, 0.03)',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: '12px',
-                        }}
-                      >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <span style={{ fontWeight: 700, color: '#fff', fontSize: '0.95rem' }}>{cfg.name}</span>
-                          {selected && <Check size={16} color="var(--accent-cyan)" />}
-                        </div>
-                        <div style={{ display: 'flex', gap: '8px' }}>
-                          <div style={{ width: '24px', height: '24px', borderRadius: '4px', background: cfg.bgPrimary, border: '1px solid #444' }} />
-                          <div style={{ width: '24px', height: '24px', borderRadius: '4px', background: cfg.accentCyan }} />
-                          <div style={{ width: '24px', height: '24px', borderRadius: '4px', background: cfg.accentMagenta }} />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* 3D Mode Selector */}
-              <div>
-                <h4 style={{ fontFamily: 'var(--font-heading)', color: '#fff', fontSize: '1.3rem', marginBottom: '8px' }}>
-                  Hero 3D Visualization Mode
-                </h4>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
-                  {[
-                    { id: 'kinetic_360', label: 'Kinetic 360 Avatar', desc: 'Original reference experience with mouse tracking & dual lighting' },
-                    { id: 'hologram_core', label: 'Hologram Core', desc: 'Rotating cybernetic particle simulation and wireframe geometry' },
-                    { id: 'cyber_wireframe', label: 'Cyber Grid', desc: 'Minimalist high-contrast tech mesh with pulsing rim shaders' },
-                  ].map((mode) => {
-                    const selected = portfolio.hero3DMode === mode.id;
-                    return (
-                      <div
-                        key={mode.id}
-                        onClick={() => {
-                          const updated = { ...portfolio, hero3DMode: mode.id as Hero3DMode };
-                          setHistory((prev) => [...prev, updated]);
-                          setFuture([]);
-                          onUpdatePortfolio(updated);
-                        }}
-                        style={{
-                          padding: '16px',
+                          alignSelf: msg.sender === 'user' ? 'flex-end' : 'flex-start',
+                          maxWidth: '82%',
+                          padding: '10px 14px',
                           borderRadius: '10px',
-                          border: selected ? '2px solid var(--accent-cyan)' : '1px solid rgba(255, 255, 255, 0.1)',
-                          background: selected ? 'rgba(0, 242, 254, 0.08)' : 'rgba(255, 255, 255, 0.02)',
-                          cursor: 'pointer',
+                          background: msg.sender === 'user' ? 'rgba(0, 242, 254, 0.15)' : 'rgba(255, 255, 255, 0.05)',
+                          border: msg.sender === 'user' ? '1px solid var(--accent-cyan)' : '1px solid rgba(255, 255, 255, 0.1)',
+                          color: '#ffffff',
+                          fontSize: '0.85rem',
+                          lineHeight: 1.5,
                         }}
                       >
-                        <div style={{ fontWeight: 700, color: selected ? 'var(--accent-cyan)' : '#fff', marginBottom: '6px' }}>
-                          {mode.label}
+                        <div style={{ marginBottom: '4px', display: 'flex', justifyContent: 'space-between', gap: '8px' }}>
+                          <span
+                            style={{
+                              fontFamily: 'var(--font-mono)',
+                              fontSize: '0.65rem',
+                              color: msg.sender === 'user' ? 'var(--accent-cyan)' : 'var(--accent-magenta)',
+                              textTransform: 'uppercase',
+                            }}
+                          >
+                            {msg.sender === 'user' ? 'You' : `AI Co-Pilot ${msg.liveAi ? '(OpenAI)' : '(Offline)'}`}
+                          </span>
+                          <span style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.4)' }}>{msg.timestamp}</span>
                         </div>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{mode.desc}</div>
+                        <div>{msg.text}</div>
                       </div>
-                    );
-                  })}
+                    ))}
+                    {isChatting && (
+                      <div style={{ color: 'var(--accent-cyan)', fontFamily: 'var(--font-mono)', fontSize: '0.78rem' }}>
+                        AI Co-Pilot is processing instructions...
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Input Form */}
+                  <form onSubmit={handleSendChatMessage} style={{ display: 'flex', gap: '10px' }}>
+                    <input
+                      type="text"
+                      placeholder="Instruct co-pilot (e.g. 'Highlight ANSYS FEA simulation')..."
+                      value={chatInput}
+                      onChange={(e) => setChatInput(e.target.value)}
+                      style={{
+                        flex: 1,
+                        padding: '10px 14px',
+                        background: 'rgba(5, 7, 11, 0.8)',
+                        border: '1px solid rgba(255, 255, 255, 0.15)',
+                        borderRadius: '8px',
+                        color: '#ffffff',
+                        fontSize: '0.9rem',
+                        outline: 'none',
+                      }}
+                    />
+                    <button type="submit" disabled={isChatting} className="btn-primary" style={{ padding: '10px 16px' }}>
+                      <Send size={15} />
+                    </button>
+                  </form>
                 </div>
+              )}
+
+              {/* Navigation */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '16px', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '16px' }}>
+                <button
+                  type="button"
+                  onClick={() => setCurrentStep('generate')}
+                  style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', padding: '10px 18px', borderRadius: '8px', cursor: 'pointer' }}
+                >
+                  ← Back to Generate
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCurrentStep('download_publish')}
+                  className="btn-primary"
+                  style={{ padding: '10px 24px' }}
+                >
+                  <span>Proceed to Step 4: Download / Publish</span>
+                  <ArrowRight size={16} />
+                </button>
               </div>
             </div>
           )}
 
+          {/* ========================================================================= */}
           {/* STEP 4: DOWNLOAD OR PUBLISH */}
-          {activeTab === 'export' && (
-            <div style={{ maxWidth: '680px', margin: '0 auto', textAlign: 'center' }}>
+          {/* ========================================================================= */}
+          {currentStep === 'download_publish' && (
+            <div style={{ maxWidth: '720px', margin: '0 auto', textAlign: 'center' }}>
               <div
                 style={{
                   width: '64px',
@@ -2600,44 +3037,146 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
                 <Download size={28} color="var(--accent-cyan)" />
               </div>
 
-              <h4 style={{ fontFamily: 'var(--font-display)', color: '#fff', fontSize: '1.6rem', marginBottom: '8px' }}>
-                Download & Publish Your 3D Portfolio
+              <h4 style={{ fontFamily: 'var(--font-display)', color: '#fff', fontSize: '1.7rem', marginBottom: '8px' }}>
+                Export & Publish Your Portfolio
               </h4>
               <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '28px', lineHeight: 1.5 }}>
-                Export your portfolio as a complete standalone package. Double-click <code>index.html</code> to run offline, or deploy directly to GitHub Pages or any static host with zero setup.
+                Export your tailored 3D website as a standalone package, open the professional ATS Resume Studio, or copy your public portfolio share link.
               </p>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', maxWidth: '440px', margin: '0 auto' }}>
-                <button
-                  onClick={handleExportZip}
-                  disabled={exportingZip}
-                  className="btn-primary"
-                  style={{ padding: '16px', justifyContent: 'center', fontSize: '1rem' }}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px', marginBottom: '24px' }}>
+                {/* 1. Standalone ZIP Package */}
+                <div
+                  style={{
+                    padding: '20px',
+                    borderRadius: '12px',
+                    background: 'rgba(255, 255, 255, 0.03)',
+                    border: '1px solid rgba(0, 242, 254, 0.3)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    gap: '12px',
+                    textAlign: 'left',
+                  }}
                 >
-                  <Download size={18} />
-                  <span>{exportingZip ? 'PACKAGING STANDALONE ZIP...' : 'DOWNLOAD STANDALONE WEBSITE (ZIP)'}</span>
-                </button>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--accent-cyan)', marginBottom: '6px' }}>
+                      <Download size={18} />
+                      <span style={{ fontWeight: 700, fontSize: '0.95rem' }}>Standalone Website ZIP</span>
+                    </div>
+                    <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+                      Complete offline HTML + CSS bundle with 3D canvas and portfolio.json. Deploy anywhere with zero build steps.
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleExportZip}
+                    disabled={exportingZip}
+                    className="btn-primary"
+                    style={{ padding: '12px', justifyContent: 'center', fontSize: '0.88rem' }}
+                  >
+                    <span>{exportingZip ? 'PACKAGING...' : 'DOWNLOAD ZIP'}</span>
+                  </button>
+                </div>
 
+                {/* 2. ATS Resume Studio Launcher */}
+                <div
+                  style={{
+                    padding: '20px',
+                    borderRadius: '12px',
+                    background: 'rgba(255, 255, 255, 0.03)',
+                    border: '1px solid rgba(255, 0, 85, 0.3)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    gap: '12px',
+                    textAlign: 'left',
+                  }}
+                >
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--accent-magenta)', marginBottom: '6px' }}>
+                      <FileText size={18} />
+                      <span style={{ fontWeight: 700, fontSize: '0.95rem' }}>ATS Resume Studio</span>
+                    </div>
+                    <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+                      Download publication-ready, multi-page PDF & DOCX resumes with classic, modern, or engineering templates.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      onClose();
+                      if (onOpenResume) onOpenResume();
+                    }}
+                    className="btn-primary"
+                    style={{
+                      padding: '12px',
+                      justifyContent: 'center',
+                      fontSize: '0.88rem',
+                      background: 'linear-gradient(135deg, var(--accent-magenta), #cc0044)',
+                    }}
+                  >
+                    <span>OPEN RESUME STUDIO</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Public Share Link Card */}
+              <div
+                style={{
+                  padding: '16px 20px',
+                  borderRadius: '10px',
+                  background: 'rgba(255, 255, 255, 0.02)',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '12px',
+                  marginBottom: '28px',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', overflow: 'hidden' }}>
+                  <Share2 size={16} color="var(--accent-cyan)" />
+                  <span style={{ fontSize: '0.82rem', color: '#fff', fontFamily: 'var(--font-mono)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                    {typeof window !== 'undefined' ? window.location.href : 'http://localhost:5173/'}
+                  </span>
+                </div>
                 <button
                   onClick={handleCopyShareableLink}
                   style={{
-                    padding: '14px',
-                    borderRadius: '8px',
-                    background: 'rgba(255, 255, 255, 0.05)',
-                    border: '1px solid rgba(255, 255, 255, 0.15)',
-                    color: '#ffffff',
-                    fontFamily: 'var(--font-heading)',
-                    fontSize: '0.9rem',
-                    fontWeight: 600,
+                    background: copiedLink ? 'rgba(0, 242, 254, 0.2)' : 'rgba(255, 255, 255, 0.08)',
+                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                    color: copiedLink ? 'var(--accent-cyan)' : '#ffffff',
+                    padding: '8px 14px',
+                    borderRadius: '6px',
                     cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '8px',
+                    gap: '6px',
+                    fontSize: '0.78rem',
+                    flexShrink: 0,
                   }}
                 >
-                  <Share2 size={16} />
-                  <span>{copiedLink ? 'LINK COPIED TO CLIPBOARD!' : 'COPY PORTFOLIO LINK'}</span>
+                  {copiedLink ? <Check size={14} /> : <Copy size={14} />}
+                  <span>{copiedLink ? 'COPIED!' : 'COPY LINK'}</span>
+                </button>
+              </div>
+
+              {/* Back to Customize and Close Action */}
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <button
+                  type="button"
+                  onClick={() => setCurrentStep('customize')}
+                  style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', padding: '10px 18px', borderRadius: '8px', cursor: 'pointer' }}
+                >
+                  ← Back to Customize
+                </button>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="btn-primary"
+                  style={{ padding: '12px 28px', fontSize: '0.92rem' }}
+                >
+                  <Check size={16} />
+                  <span>Finish & View Live 3D Portfolio</span>
                 </button>
               </div>
             </div>
