@@ -1,7 +1,7 @@
 {
-  "name": "temp_app",
+  "name": "ai-powered-3d-portfolio-generator",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -14,7 +14,8 @@
     "preview": "vite preview",
     "test:server": "node test_server_ai.mjs",
     "test:resume": "node test_resume_export.mjs && node test_resume_edge_cases_and_inspect.mjs",
-    "test:all": "node test_verification.mjs && node test_server_ai.mjs && node test_resume_export.mjs && node test_resume_edge_cases_and_inspect.mjs"
+    "test:phase3": "node test_phase3_split_customizer.mjs",
+    "test:all": "node test_verification.mjs && node test_server_ai.mjs && node test_resume_export.mjs && node test_resume_edge_cases_and_inspect.mjs && node test_phase3_split_customizer.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
