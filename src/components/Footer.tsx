@@ -1,0 +1,286 @@
+import React from 'react';
+import { ArrowUp, ArrowRight } from 'lucide-react';
+import { GithubIcon, LinkedinIcon, TwitterIcon } from './Icons';
+import type { PortfolioData } from '../types/portfolio';
+
+interface FooterProps {
+  portfolio: PortfolioData;
+}
+
+export const Footer: React.FC<FooterProps> = ({ portfolio }) => {
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  return (
+    <footer
+      style={{
+        width: '100%',
+        padding: '80px 24px 40px',
+        background: '#020306',
+        borderTop: '1px solid rgba(0, 242, 254, 0.15)',
+        position: 'relative',
+        zIndex: 10,
+      }}
+    >
+      <div
+        style={{
+          maxWidth: '1280px',
+          margin: '0 auto',
+        }}
+      >
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+            gap: '48px',
+            marginBottom: '64px',
+          }}
+        >
+          {/* Column 1: Brand & Philosophy */}
+          <div>
+            <div
+              style={{
+                fontFamily: 'var(--font-display)',
+                fontSize: '1.4rem',
+                fontWeight: 800,
+                color: '#ffffff',
+                letterSpacing: '0.05em',
+                marginBottom: '12px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+              }}
+            >
+              {portfolio.name.split(' ')[0]}
+              <span style={{ color: 'var(--accent-cyan)' }}>.</span>
+            </div>
+            <p
+              style={{
+                fontFamily: 'var(--font-body)',
+                fontSize: '0.88rem',
+                color: 'var(--text-secondary)',
+                lineHeight: 1.7,
+                maxWidth: '320px',
+                marginBottom: '24px',
+              }}
+            >
+              ARCHITECTURE AND INTERACTION DESIGN FOR NEXT-GENERATION DIGITAL EXPERIENCES AND PRODUCTION-GRADE AI SYSTEMS.
+            </p>
+            <div className="badge-neon" style={{ fontSize: '0.68rem' }}>
+              <span>PROD_VERSION_2.6 // AGY_COMPLIANT</span>
+            </div>
+          </div>
+
+          {/* Column 2: Quick Jump Directory */}
+          <div>
+            <div
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: '0.75rem',
+                letterSpacing: '0.12em',
+                color: 'var(--accent-cyan)',
+                marginBottom: '20px',
+              }}
+            >
+              DIRECTORY // NAVIGATION
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {['HOME', 'ABOUT', 'PROJECTS', 'EXPERIENCE', 'CONTACT'].map((item) => (
+                <a
+                  key={item}
+                  href={`#${item.toLowerCase()}`}
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '0.82rem',
+                    color: 'var(--text-secondary)',
+                    textDecoration: 'none',
+                    transition: 'color 0.2s ease',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.color = 'var(--accent-cyan)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.color = 'var(--text-secondary)';
+                  }}
+                >
+                  &gt; {item}
+                </a>
+              ))}
+            </div>
+          </div>
+
+          {/* Column 3: Social Network Handles */}
+          <div>
+            <div
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: '0.75rem',
+                letterSpacing: '0.12em',
+                color: 'var(--accent-magenta)',
+                marginBottom: '20px',
+              }}
+            >
+              SOCIAL NETWORKS // HANDLES
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <a
+                href={portfolio.github || 'https://github.com'}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '0.82rem',
+                  color: 'var(--text-secondary)',
+                  textDecoration: 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                }}
+              >
+                <GithubIcon size={14} />
+                <span>GITHUB // {portfolio.name.toLowerCase().replace(/\s+/g, '')}</span>
+              </a>
+              <a
+                href={portfolio.linkedin || 'https://linkedin.com'}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '0.82rem',
+                  color: 'var(--text-secondary)',
+                  textDecoration: 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                }}
+              >
+                <LinkedinIcon size={14} />
+                <span>LINKEDIN // PROFESSIONAL_PROFILE</span>
+              </a>
+              <a
+                href={portfolio.twitter || 'https://x.com'}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '0.82rem',
+                  color: 'var(--text-secondary)',
+                  textDecoration: 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                }}
+              >
+                <TwitterIcon size={14} />
+                <span>X // TRANSMISSIONS</span>
+              </a>
+            </div>
+          </div>
+
+          {/* Column 4: Broadcast Transmission Input */}
+          <div>
+            <div
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: '0.75rem',
+                letterSpacing: '0.12em',
+                color: '#ffffff',
+                marginBottom: '16px',
+              }}
+            >
+              BROADCAST_LINK // SUBSCRIBE
+            </div>
+            <p
+              style={{
+                fontFamily: 'var(--font-body)',
+                fontSize: '0.82rem',
+                color: 'var(--text-secondary)',
+                marginBottom: '16px',
+              }}
+            >
+              Receive updates on newly published AI prototypes and 3D web graphics experiments.
+            </p>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <input
+                type="email"
+                placeholder="YOUR_EMAIL@DOMAIN.COM"
+                style={{
+                  flex: 1,
+                  padding: '10px 14px',
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  border: '1px solid rgba(255, 255, 255, 0.15)',
+                  borderRadius: '6px',
+                  color: '#ffffff',
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '0.75rem',
+                  outline: 'none',
+                }}
+              />
+              <button
+                className="btn-primary"
+                style={{ padding: '10px 14px', borderRadius: '6px' }}
+                title="Send"
+              >
+                <ArrowRight size={16} />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Bottom Bar: Copyright & Back to Top */}
+        <div
+          style={{
+            paddingTop: '32px',
+            borderTop: '1px solid rgba(255, 255, 255, 0.06)',
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '16px',
+          }}
+        >
+          <div
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: '0.72rem',
+              color: 'var(--text-secondary)',
+            }}
+          >
+            © {new Date().getFullYear()} {portfolio.name.toUpperCase()}. ALL RIGHTS RESERVED. POWERED BY ANTIGRAVITY AI.
+          </div>
+
+          <button
+            onClick={scrollToTop}
+            style={{
+              background: 'rgba(255, 255, 255, 0.04)',
+              border: '1px solid rgba(255, 255, 255, 0.12)',
+              borderRadius: '8px',
+              padding: '8px 16px',
+              color: '#ffffff',
+              fontFamily: 'var(--font-mono)',
+              fontSize: '0.72rem',
+              letterSpacing: '0.1em',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.borderColor = 'var(--accent-cyan)';
+              e.currentTarget.style.color = 'var(--accent-cyan)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.12)';
+              e.currentTarget.style.color = '#ffffff';
+            }}
+          >
+            <span>BACK TO TOP</span>
+            <ArrowUp size={14} />
+          </button>
+        </div>
+      </div>
+    </footer>
+  );
+};
