@@ -9,12 +9,14 @@ export interface ServerHealth {
 }
 
 export interface AiGenerationResult {
+  source: 'ai' | 'fallback';
   liveAi: boolean;
   isFallback: boolean;
   model: string;
   portfolio: PortfolioData;
   improvementSuggestions?: string[];
   message: string;
+  fieldErrors?: Record<string, string[]>;
 }
 
 export interface AiRewriteResult {
@@ -102,6 +104,7 @@ export class AiApiClient {
       if (res.ok) {
         const data = await res.json();
         return {
+          source: data.source || (data.liveAi ? 'ai' : 'fallback'),
           liveAi: Boolean(data.liveAi),
           isFallback: Boolean(data.isFallback),
           model: data.model || 'gpt-4o',
@@ -110,19 +113,28 @@ export class AiApiClient {
           message: data.message || 'Generated portfolio successfully.',
         };
       }
-    } catch (err) {
+
+      if (res.status === 400) {
+        const errData = await res.json();
+        const err: any = new Error(errData.message || 'Validation Error');
+        err.fieldErrors = errData.fieldErrors;
+        throw err;
+      }
+    } catch (err: any) {
+      if (err?.fieldErrors) throw err;
       console.warn('[AI API Client] Backend unreachable, falling back to client engine:', err);
     }
 
     // Client-side fallback
     const fallbackPortfolio = AiEngine.generatePortfolioFromAutopilot(params);
     return {
+      source: 'fallback',
       liveAi: false,
       isFallback: true,
       model: 'client_offline_engine',
       portfolio: fallbackPortfolio,
       improvementSuggestions: ['Configure backend and OPENAI_API_KEY for dynamic real-time model synthesis.'],
-      message: 'Generated using client-side offline fact-governed engine.',
+      message: 'Generated with the offline engine; connect AI for richer results',
     };
   }
 

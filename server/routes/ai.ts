@@ -19,11 +19,13 @@ export const aiRouter = Router();
 aiRouter.post('/generate-portfolio', async (req: Request, res: Response) => {
   const parseResult = GeneratePortfolioInputSchema.safeParse(req.body);
   if (!parseResult.success) {
+    const flattened = parseResult.error.flatten();
     return res.status(400).json({
       success: false,
-      error: 'Invalid input parameters',
-      message: 'The submitted portfolio generator details failed schema validation.',
-      details: parseResult.error.flatten(),
+      error: 'Validation Error',
+      message: 'The submitted portfolio generator details failed validation.',
+      fieldErrors: flattened.fieldErrors,
+      details: flattened,
     });
   }
 
@@ -89,6 +91,7 @@ aiRouter.post('/generate-portfolio', async (req: Request, res: Response) => {
 
       return res.json({
         success: true,
+        source: 'ai',
         liveAi: true,
         isFallback: false,
         model: OpenAiService.getModel(),
@@ -117,10 +120,19 @@ aiRouter.post('/generate-portfolio', async (req: Request, res: Response) => {
     currentProfile: baseProfile,
   });
 
-  const normalizedFallback = normalizePortfolioData(fallbackRaw);
+  const mergedFallback = {
+    ...fallbackRaw,
+    branch: targetDiscipline,
+    discipline: targetDiscipline,
+    disciplineName: customBranchName || fallbackRaw.branchName,
+    branchName: customBranchName || fallbackRaw.branchName,
+  };
+
+  const normalizedFallback = normalizePortfolioData(mergedFallback);
 
   return res.json({
     success: true,
+    source: 'fallback',
     liveAi: false,
     isFallback: true,
     model: 'offline_heuristic_v1',
@@ -129,7 +141,7 @@ aiRouter.post('/generate-portfolio', async (req: Request, res: Response) => {
       'Supply specific metrics and project links to improve presentation strength.',
       'Configure OPENAI_API_KEY in server/.env to unlock dynamic real-time synthesis.',
     ],
-    message: 'Generated using deterministic offline fact-governed engine.',
+    message: 'Generated with the offline engine; connect AI for richer results',
   });
 });
 

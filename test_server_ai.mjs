@@ -51,7 +51,8 @@ async function runTests() {
     assert(data.portfolio.name.includes('Sharvil'), 'Portfolio name preserved');
     assert(data.portfolio.sectionVisibility.education === true, 'Student enables education section');
     assert(data.portfolio.projects.length > 0, 'Student has projects array');
-    console.log(`ℹ️ Generation mode: ${data.liveAi ? 'Live OpenAI' : 'Offline Fallback'} (${data.model})`);
+    assert(data.source === 'ai' || data.source === 'fallback', 'Response includes source: "ai" | "fallback"');
+    console.log(`ℹ️ Generation mode: [source: ${data.source}] ${data.liveAi ? 'Live OpenAI' : 'Offline Fallback'} (${data.model})`);
   } catch (e) {
     assert(false, `Student generation failed: ${e.message}`);
   }
@@ -71,6 +72,7 @@ async function runTests() {
     const data = await res.json();
     assert(res.status === 200, 'Job Seeker generation returns HTTP 200');
     assert(data.portfolio.role === 'job_seeker', 'Role is job_seeker');
+    assert(data.source === 'ai' || data.source === 'fallback', 'Job seeker includes source');
     assert(data.portfolio.targetRole.length > 0, 'Target role headline is populated');
   } catch (e) {
     assert(false, `Job Seeker generation failed: ${e.message}`);
@@ -91,6 +93,7 @@ async function runTests() {
     const data = await res.json();
     assert(res.status === 200, 'Professional generation returns HTTP 200');
     assert(data.portfolio.role === 'professional', 'Role is professional');
+    assert(data.source === 'ai' || data.source === 'fallback', 'Professional includes source');
   } catch (e) {
     assert(false, `Professional generation failed: ${e.message}`);
   }
@@ -110,9 +113,98 @@ async function runTests() {
     const data = await res.json();
     assert(res.status === 200, 'Freelancer generation returns HTTP 200');
     assert(data.portfolio.role === 'freelancer', 'Role is freelancer');
+    assert(data.source === 'ai' || data.source === 'fallback', 'Freelancer includes source');
     assert(data.portfolio.sectionVisibility.services === true, 'Freelancer enables services');
   } catch (e) {
     assert(false, `Freelancer generation failed: ${e.message}`);
+  }
+
+  // 5b. Generate Portfolio - Discipline: Mechanical Engineering
+  console.log('\n--- 5b. Generation: Mechanical Engineering Discipline ---');
+  try {
+    const res = await fetch(`${baseUrl}/api/ai/generate-portfolio`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Vikram Joshi',
+        branch: 'mechanical',
+        interests: 'CAD Modeling, Finite Element Analysis, SolidWorks, Robotics',
+        role: 'student',
+      }),
+    });
+    const data = await res.json();
+    assert(res.status === 200, 'Mechanical generation returns HTTP 200');
+    assert(data.source === 'ai' || data.source === 'fallback', 'Mechanical includes source');
+    assert(data.portfolio.branch === 'mechanical', 'Discipline branch is mechanical');
+    assert(data.portfolio.skills.some(s => /cad|ansys|solidworks|fea|thermo|fluid|mechan/i.test(s.name)), 'Mechanical skills populated');
+  } catch (e) {
+    assert(false, `Mechanical generation failed: ${e.message}`);
+  }
+
+  // 5c. Generate Portfolio - Discipline: Civil Engineering
+  console.log('\n--- 5c. Generation: Civil Engineering Discipline ---');
+  try {
+    const res = await fetch(`${baseUrl}/api/ai/generate-portfolio`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Aanya Sharma',
+        branch: 'civil',
+        interests: 'Structural Dynamics, Seismic Design, STAAD Pro, BIM',
+        role: 'job_seeker',
+      }),
+    });
+    const data = await res.json();
+    assert(res.status === 200, 'Civil generation returns HTTP 200');
+    assert(data.source === 'ai' || data.source === 'fallback', 'Civil includes source');
+    assert(data.portfolio.branch === 'civil', 'Discipline branch is civil');
+    assert(data.portfolio.skills.some(s => /staad|autocad|revit|etabs|concrete|geo|structur/i.test(s.name)), 'Civil skills populated');
+  } catch (e) {
+    assert(false, `Civil generation failed: ${e.message}`);
+  }
+
+  // 5d. Generate Portfolio - Discipline: Electrical Engineering
+  console.log('\n--- 5d. Generation: Electrical Engineering Discipline ---');
+  try {
+    const res = await fetch(`${baseUrl}/api/ai/generate-portfolio`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'David Kim',
+        branch: 'electrical',
+        interests: 'Power Grid Modernization, High Voltage Systems, MATLAB Simulink',
+        role: 'professional',
+      }),
+    });
+    const data = await res.json();
+    assert(res.status === 200, 'Electrical generation returns HTTP 200');
+    assert(data.source === 'ai' || data.source === 'fallback', 'Electrical includes source');
+    assert(data.portfolio.branch === 'electrical', 'Discipline branch is electrical');
+  } catch (e) {
+    assert(false, `Electrical generation failed: ${e.message}`);
+  }
+
+  // 5e. Generate Portfolio - Custom Discipline: "Marine Engineering"
+  console.log('\n--- 5e. Generation: Custom Discipline ("Marine Engineering") ---');
+  try {
+    const res = await fetch(`${baseUrl}/api/ai/generate-portfolio`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Captain Alistair Finch',
+        branch: 'other',
+        customBranchName: 'Marine Engineering',
+        interests: 'Hydrodynamic Propulsion, Naval Architecture, Diesel Plant Automation',
+        role: 'professional',
+      }),
+    });
+    const data = await res.json();
+    assert(res.status === 200, 'Marine Engineering custom generation returns HTTP 200');
+    assert(data.source === 'ai' || data.source === 'fallback', 'Custom discipline includes source');
+    const branchName = data.portfolio.branchName || data.portfolio.disciplineName || '';
+    assert(/marine/i.test(branchName) || /marine/i.test(data.portfolio.tagline) || /marine/i.test(data.portfolio.shortBio), 'Marine Engineering terminology synthesized');
+  } catch (e) {
+    assert(false, `Marine Engineering generation failed: ${e.message}`);
   }
 
   // 6. Rewrite Section Endpoint
@@ -194,17 +286,45 @@ async function runTests() {
   // 9. Input Validation and Security Rejection Check (400 Bad Request)
   console.log('\n--- 9. Security & Validation Rejection Check ---');
   try {
-    const res = await fetch(`${baseUrl}/api/ai/generate-portfolio`, {
+    // Missing required name
+    const resMissingName = await fetch(`${baseUrl}/api/ai/generate-portfolio`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: '   ', // Empty name
+        role: 'student',
+      }),
+    });
+    assert(resMissingName.status === 400, 'Empty name triggers HTTP 400 Bad Request');
+    const errMissingName = await resMissingName.json();
+    assert(errMissingName.fieldErrors?.name !== undefined, 'fieldErrors.name returned for empty name');
+
+    // Invalid email format
+    const resBadEmail = await fetch(`${baseUrl}/api/ai/generate-portfolio`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Valid Name',
+        email: 'not-an-email-at-all',
+        role: 'student',
+      }),
+    });
+    assert(resBadEmail.status === 400, 'Invalid email triggers HTTP 400 Bad Request');
+    const errBadEmail = await resBadEmail.json();
+    assert(errBadEmail.fieldErrors?.email !== undefined, 'fieldErrors.email returned for invalid email format');
+
+    // Invalid role injection
+    const resBadRole = await fetch(`${baseUrl}/api/ai/generate-portfolio`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         name: 'Test',
-        role: 'unsupported_role_injection', // Invalid role
+        role: 'unsupported_role_injection',
       }),
     });
-    assert(res.status === 400, 'Invalid role triggers HTTP 400 Bad Request');
-    const data = await res.json();
-    assert(data.error !== undefined, 'Error message properly formatted');
+    assert(resBadRole.status === 400, 'Invalid role triggers HTTP 400 Bad Request');
+    const errBadRole = await resBadRole.json();
+    assert(errBadRole.fieldErrors?.role !== undefined, 'fieldErrors.role returned for invalid role');
   } catch (e) {
     assert(false, `Validation rejection check failed: ${e.message}`);
   }

@@ -11,10 +11,11 @@ export const UserRoleSchema = PersonaSchema;
 export const EducationBranchSchema = DisciplineSchema;
 
 export const GeneratePortfolioInputSchema = z.object({
-  name: z.string().trim().max(120).default(''),
-  branch: z.string().trim().max(120).default('cs_it'),
-  customBranchName: z.string().trim().max(120).optional(),
-  interests: z.string().trim().max(1000).default(''),
+  name: z.string().trim().min(1, 'Name is required').max(100, 'Name must not exceed 100 characters'),
+  email: z.string().trim().email('Invalid email address format').max(150, 'Email must not exceed 150 characters').optional().or(z.literal('')),
+  branch: z.string().trim().min(1, 'Discipline branch is required').max(100, 'Branch must not exceed 100 characters').default('cs_it'),
+  customBranchName: z.string().trim().max(120, 'Custom branch name must not exceed 120 characters').optional(),
+  interests: z.string().trim().max(1000, 'Interests must not exceed 1000 characters').default(''),
   role: PersonaSchema.default('student'),
   persona: PersonaSchema.optional(),
   discipline: z.string().optional(),

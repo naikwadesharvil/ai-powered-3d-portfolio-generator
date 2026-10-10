@@ -138,11 +138,13 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
   const [generationStep, setGenerationStep] = useState<string>('');
   const [generationMeta, setGenerationMeta] = useState<{
     liveAi: boolean;
+    source: 'ai' | 'fallback';
     model: string;
     message: string;
     suggestions?: string[];
   } | null>(null);
   const [generationError, setGenerationError] = useState<string | null>(null);
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
   // Conversational Assistant State
   const [chatInput, setChatInput] = useState('');
@@ -296,6 +298,39 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
   // Run AI Generation (Autopilot)
   const handleRunAutopilot = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+
+    // Client-side form validation
+    const errors: Record<string, string> = {};
+    if (!autopilotName.trim()) {
+      errors.name = 'Full name is required.';
+    } else if (autopilotName.trim().length > 100) {
+      errors.name = 'Name must not exceed 100 characters.';
+    }
+
+    if (userEmail.trim()) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(userEmail.trim())) {
+        errors.email = 'Please enter a valid email address format.';
+      } else if (userEmail.trim().length > 150) {
+        errors.email = 'Email must not exceed 150 characters.';
+      }
+    }
+
+    if (selectedBranch === 'other' && !customBranchName.trim()) {
+      errors.customBranchName = 'Custom discipline name is required when selecting Other.';
+    } else if (selectedBranch === 'other' && customBranchName.trim().length > 120) {
+      errors.customBranchName = 'Discipline name must not exceed 120 characters.';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
+      setCurrentStep('details');
+      setDetailsSubTab('persona_discipline');
+      setGenerationError('Please fix the validation errors before generating.');
+      return;
+    }
+
+    setFormErrors({});
     setIsGenerating(true);
     setGenerationError(null);
     setStreamProgress(15);
@@ -347,6 +382,7 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
 
       setGenerationMeta({
         liveAi: result.liveAi,
+        source: result.source || (result.liveAi ? 'ai' : 'fallback'),
         model: result.model,
         message: result.message,
         suggestions: result.improvementSuggestions,
@@ -362,7 +398,20 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
     } catch (err: any) {
       clearTimeout(timer1);
       clearTimeout(timer2);
-      setGenerationError(err?.message || 'Failed to complete generation. Please retry.');
+      if (err?.fieldErrors) {
+        const mappedErrors: Record<string, string> = {};
+        for (const [key, msgs] of Object.entries(err.fieldErrors)) {
+          if (Array.isArray(msgs) && msgs.length > 0) {
+            mappedErrors[key] = (msgs as string[])[0];
+          }
+        }
+        setFormErrors(mappedErrors);
+        setCurrentStep('details');
+        setDetailsSubTab('persona_discipline');
+        setGenerationError('Server rejected inputs due to validation errors. Please review highlighted fields.');
+      } else {
+        setGenerationError(err?.message || 'Failed to complete generation. Please retry.');
+      }
     } finally {
       setIsGenerating(false);
     }
@@ -1306,18 +1355,26 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
                         type="text"
                         placeholder="e.g. Biomedical Engineering, Aerospace Propulsion, Chemical Systems..."
                         value={customBranchName}
-                        onChange={(e) => handleCustomBranchChange(e.target.value)}
+                        onChange={(e) => {
+                          handleCustomBranchChange(e.target.value);
+                          if (formErrors.customBranchName) setFormErrors((prev) => ({ ...prev, customBranchName: '' }));
+                        }}
                         style={{
                           width: '100%',
                           padding: '12px 16px',
                           background: 'rgba(5, 7, 11, 0.8)',
-                          border: '1px solid rgba(255, 255, 255, 0.2)',
+                          border: formErrors.customBranchName ? '1px solid #ff0055' : '1px solid rgba(255, 255, 255, 0.2)',
                           borderRadius: '8px',
                           color: '#fff',
                           fontSize: '0.95rem',
                           outline: 'none',
                         }}
                       />
+                      {formErrors.customBranchName && (
+                        <div style={{ color: '#ff4466', fontSize: '0.74rem', marginTop: '4px', fontFamily: 'var(--font-mono)' }}>
+                          {formErrors.customBranchName}
+                        </div>
+                      )}
                       <p style={{ fontSize: '0.75rem', color: 'rgba(255, 255, 255, 0.65)', marginTop: '8px' }}>
                         Custom disciplines dynamically generate technical terminology, skill categories, and project archetypes without requiring code changes.
                       </p>
@@ -1328,22 +1385,30 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px' }}>
                     <div>
                       <label style={{ display: 'block', fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'rgba(255,255,255,0.7)', marginBottom: '6px' }}>
-                        FULL NAME
+                        FULL NAME *
                       </label>
                       <input
                         type="text"
                         value={autopilotName}
-                        onChange={(e) => setAutopilotName(e.target.value)}
+                        onChange={(e) => {
+                          setAutopilotName(e.target.value);
+                          if (formErrors.name) setFormErrors((prev) => ({ ...prev, name: '' }));
+                        }}
                         placeholder="e.g. Alex Chen"
                         style={{
                           width: '100%',
                           padding: '12px 16px',
                           background: 'rgba(5, 7, 11, 0.8)',
-                          border: '1px solid rgba(255, 255, 255, 0.15)',
+                          border: formErrors.name ? '1px solid #ff0055' : '1px solid rgba(255, 255, 255, 0.15)',
                           borderRadius: '8px',
                           color: '#fff',
                         }}
                       />
+                      {formErrors.name && (
+                        <div style={{ color: '#ff4466', fontSize: '0.74rem', marginTop: '4px', fontFamily: 'var(--font-mono)' }}>
+                          {formErrors.name}
+                        </div>
+                      )}
                     </div>
                     <div>
                       <label style={{ display: 'block', fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'rgba(255,255,255,0.7)', marginBottom: '6px' }}>
@@ -1352,17 +1417,25 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
                       <input
                         type="email"
                         value={userEmail}
-                        onChange={(e) => setUserEmail(e.target.value)}
+                        onChange={(e) => {
+                          setUserEmail(e.target.value);
+                          if (formErrors.email) setFormErrors((prev) => ({ ...prev, email: '' }));
+                        }}
                         placeholder="e.g. alex.chen@engineering.io"
                         style={{
                           width: '100%',
                           padding: '12px 16px',
                           background: 'rgba(5, 7, 11, 0.8)',
-                          border: '1px solid rgba(255, 255, 255, 0.15)',
+                          border: formErrors.email ? '1px solid #ff0055' : '1px solid rgba(255, 255, 255, 0.15)',
                           borderRadius: '8px',
                           color: '#fff',
                         }}
                       />
+                      {formErrors.email && (
+                        <div style={{ color: '#ff4466', fontSize: '0.74rem', marginTop: '4px', fontFamily: 'var(--font-mono)' }}>
+                          {formErrors.email}
+                        </div>
+                      )}
                     </div>
                     <div>
                       <label style={{ display: 'block', fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'rgba(255,255,255,0.7)', marginBottom: '6px' }}>
@@ -2169,13 +2242,35 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
                   style={{
                     padding: '20px',
                     borderRadius: '12px',
-                    background: generationMeta.liveAi ? 'rgba(0, 242, 254, 0.08)' : 'rgba(255, 170, 0, 0.08)',
-                    border: generationMeta.liveAi ? '1px solid rgba(0, 242, 254, 0.3)' : '1px solid rgba(255, 170, 0, 0.3)',
+                    background: generationMeta.source === 'ai' ? 'rgba(0, 242, 254, 0.08)' : 'rgba(255, 170, 0, 0.08)',
+                    border: generationMeta.source === 'ai' ? '1px solid rgba(0, 242, 254, 0.3)' : '1px solid rgba(255, 170, 0, 0.3)',
                     marginBottom: '24px',
                   }}
                 >
+                  {/* Non-alarming fallback engine notice */}
+                  {generationMeta.source === 'fallback' && (
+                    <div
+                      style={{
+                        padding: '10px 14px',
+                        borderRadius: '8px',
+                        background: 'rgba(255, 170, 0, 0.12)',
+                        border: '1px solid rgba(255, 170, 0, 0.3)',
+                        color: '#ffcc00',
+                        fontSize: '0.85rem',
+                        fontWeight: 600,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        marginBottom: '14px',
+                      }}
+                    >
+                      <Sparkles size={16} />
+                      <span>Generated with the offline engine; connect AI for richer results</span>
+                    </div>
+                  )}
+
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                    <CheckCircle2 size={18} color={generationMeta.liveAi ? '#00f2fe' : '#ffaa00'} />
+                    <CheckCircle2 size={18} color={generationMeta.source === 'ai' ? '#00f2fe' : '#ffaa00'} />
                     <span style={{ fontWeight: 700, color: '#fff', fontSize: '0.95rem' }}>
                       {generationMeta.message}
                     </span>
@@ -3119,45 +3214,81 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
                 </div>
               </div>
 
-              {/* Public Share Link Card */}
+              {/* Public Share Link Card (Coming in Phase 6: Publishing & Hosting) */}
               <div
                 style={{
-                  padding: '16px 20px',
+                  padding: '18px 20px',
                   borderRadius: '10px',
                   background: 'rgba(255, 255, 255, 0.02)',
                   border: '1px solid rgba(255, 255, 255, 0.1)',
                   display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
+                  flexDirection: 'column',
                   gap: '12px',
                   marginBottom: '28px',
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', overflow: 'hidden' }}>
-                  <Share2 size={16} color="var(--accent-cyan)" />
-                  <span style={{ fontSize: '0.82rem', color: '#fff', fontFamily: 'var(--font-mono)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-                    {typeof window !== 'undefined' ? window.location.href : 'http://localhost:5173/'}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Share2 size={16} color="var(--accent-cyan)" />
+                    <span style={{ fontWeight: 700, fontSize: '0.9rem', color: '#fff' }}>
+                      Public Shareable URL
+                    </span>
+                  </div>
+                  <span
+                    style={{
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: '0.68rem',
+                      color: 'var(--accent-cyan)',
+                      background: 'rgba(0, 242, 254, 0.1)',
+                      border: '1px solid rgba(0, 242, 254, 0.3)',
+                      padding: '2px 8px',
+                      borderRadius: '999px',
+                      textTransform: 'uppercase',
+                    }}
+                  >
+                    Coming Soon (Phase 6)
                   </span>
                 </div>
-                <button
-                  onClick={handleCopyShareableLink}
+                <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: 1.4, margin: 0 }}>
+                  Live cloud hosting, vanity domains, and public URLs are scheduled for <strong>Phase 6: Publishing & Hosting</strong>. No fake links are generated. To deploy your portfolio today, download the <strong>Standalone Website ZIP</strong> above.
+                </p>
+                <div
                   style={{
-                    background: copiedLink ? 'rgba(0, 242, 254, 0.2)' : 'rgba(255, 255, 255, 0.08)',
-                    border: '1px solid rgba(255, 255, 255, 0.2)',
-                    color: copiedLink ? 'var(--accent-cyan)' : '#ffffff',
-                    padding: '8px 14px',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '6px',
-                    fontSize: '0.78rem',
-                    flexShrink: 0,
+                    justifyContent: 'space-between',
+                    gap: '12px',
+                    padding: '8px 12px',
+                    borderRadius: '6px',
+                    background: 'rgba(0,0,0,0.3)',
+                    border: '1px dashed rgba(255,255,255,0.15)',
                   }}
                 >
-                  {copiedLink ? <Check size={14} /> : <Copy size={14} />}
-                  <span>{copiedLink ? 'COPIED!' : 'COPY LINK'}</span>
-                </button>
+                  <span style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.7)', fontFamily: 'var(--font-mono)' }}>
+                    {typeof window !== 'undefined' ? window.location.href : 'http://localhost:5173/'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleCopyShareableLink}
+                    style={{
+                      background: copiedLink ? 'rgba(0, 242, 254, 0.2)' : 'rgba(255, 255, 255, 0.08)',
+                      border: '1px solid rgba(255, 255, 255, 0.2)',
+                      color: copiedLink ? 'var(--accent-cyan)' : '#ffffff',
+                      padding: '6px 12px',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      fontSize: '0.74rem',
+                      fontFamily: 'var(--font-mono)',
+                      flexShrink: 0,
+                    }}
+                  >
+                    {copiedLink ? <Check size={14} /> : <Copy size={14} />}
+                    <span>{copiedLink ? 'LOCAL LINK COPIED!' : 'COPY LOCAL PREVIEW LINK'}</span>
+                  </button>
+                </div>
               </div>
 
               {/* Back to Customize and Close Action */}
