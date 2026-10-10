@@ -378,3 +378,51 @@ section {
   line-height: 1.5;
 }
 
+/* Spinner Animation */
+@keyframes spinSlow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.spinning {
+  animation: spinSlow 1s linear infinite;
+}
+
+/* Phase 3 Split Customizer Responsive Layout */
+.mobile-only-tabs {
+  display: none !important;
+}
+
+.split-customizer-container {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+@media (max-width: 860px) {
+  .mobile-only-tabs {
+    display: flex !important;
+  }
+
+  .split-customizer-container {
+    display: flex !important;
+    flex-direction: column !important;
+  }
+
+  .split-editor-panel.hidden-mobile,
+  .split-preview-panel.hidden-mobile {
+    display: none !important;
+  }
+
+  .split-editor-panel.active-mobile,
+  .split-preview-panel.active-mobile {
+    display: flex !important;
+    flex: 1;
+    width: 100% !important;
+  }
+
+  .hide-mobile {
+    display: none !important;
+  }
+}
+

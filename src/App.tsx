@@ -2,8 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Sparkles } from 'lucide-react';
 import type { PortfolioData, UserRole } from './types/portfolio';
 import { normalizePortfolioData } from './types/portfolioSchema';
-import { STUDENT_PROFILE, ROLE_PROFILES } from './data/defaultProfiles';
-import { THEME_CONFIGS } from './data/themeConfig';
+import { ROLE_PROFILES } from './data/defaultProfiles';
 import { Navbar } from './components/Navbar';
 import { Hero3D } from './components/Hero3D';
 import { WelcomeTransition } from './components/WelcomeTransition';
@@ -15,46 +14,29 @@ import { ContactSection } from './components/ContactSection';
 import { Footer } from './components/Footer';
 import { CreatorStudio } from './components/CreatorStudio';
 import { ResumeModal } from './components/ResumeModal';
+import { usePortfolioStore } from './store/portfolioStore';
+import { themeTokensToCssVars } from './types/themeTokens';
 
 export function App() {
-  // Load saved draft or fall back to default student profile
-  const [portfolio, setPortfolio] = useState<PortfolioData>(() => {
-    try {
-      const saved = localStorage.getItem('ai_portfolio_draft');
-      if (saved) return normalizePortfolioData(JSON.parse(saved));
-    } catch {
-      // ignore
-    }
-    return normalizePortfolioData(STUDENT_PROFILE);
-  });
+  const portfolio = usePortfolioStore((s) => s.portfolio);
+  const themeTokens = usePortfolioStore((s) => s.themeTokens);
+  const setPortfolio = usePortfolioStore((s) => s.setPortfolio);
 
   const [isStudioOpen, setIsStudioOpen] = useState(false);
   const [isResumeOpen, setIsResumeOpen] = useState(false);
   const [previewMode, setPreviewMode] = useState<'desktop' | 'tablet' | 'mobile'>('desktop');
 
-  // Synchronize CSS custom property variables with active theme
+  // Synchronize CSS custom property variables with active theme tokens
   useEffect(() => {
-    const themeCfg = THEME_CONFIGS[portfolio.theme] || THEME_CONFIGS.cyberpunk_neon;
     const root = document.documentElement;
-    root.style.setProperty('--bg-primary', themeCfg.bgPrimary);
-    root.style.setProperty('--bg-secondary', themeCfg.bgSecondary);
-    root.style.setProperty('--accent-cyan', themeCfg.accentCyan);
-    root.style.setProperty('--accent-magenta', themeCfg.accentMagenta);
-    root.style.setProperty('--text-primary', themeCfg.textPrimary);
-    root.style.setProperty('--text-secondary', themeCfg.textSecondary);
-    root.style.setProperty('--card-bg', themeCfg.cardBg);
-    root.style.setProperty('--card-border', themeCfg.cardBorder);
-    root.style.setProperty('--glow-color', themeCfg.glowColor);
-  }, [portfolio.theme]);
-
-  // Persist draft on changes
-  useEffect(() => {
-    try {
-      localStorage.setItem('ai_portfolio_draft', JSON.stringify(portfolio));
-    } catch {
-      // ignore
-    }
-  }, [portfolio]);
+    const cssVars = themeTokensToCssVars(themeTokens);
+    Object.entries(cssVars).forEach(([key, val]) => {
+      root.style.setProperty(key, val);
+    });
+    root.style.setProperty('--card-bg', themeTokens.surface);
+    root.style.setProperty('--card-border', `${themeTokens.accentPrimary}33`);
+    root.style.setProperty('--glow-color', `${themeTokens.accentPrimary}4d`);
+  }, [themeTokens]);
 
   const handleUpdatePortfolio = (updated: PortfolioData) => {
     setPortfolio(normalizePortfolioData(updated));

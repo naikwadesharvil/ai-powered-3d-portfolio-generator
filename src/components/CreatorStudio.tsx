@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import {
   X,
   Sparkles,
-  MessageSquare,
   Download,
   Share2,
   Check,
@@ -11,17 +10,8 @@ import {
   Laptop,
   Tablet,
   Smartphone,
-  Layers,
-  Palette,
-  Send,
-  Wand2,
   AlertCircle,
-  ArrowUp,
-  ArrowDown,
   ArrowRight,
-  Eye,
-  EyeOff,
-  RefreshCw,
   CheckCircle2,
   Cpu,
   Plus,
@@ -42,20 +32,19 @@ import type {
   PortfolioData,
   UserRole,
   EducationBranch,
-  ThemePreset,
-  Hero3DMode,
   TechSkill,
   ProjectItem,
   EducationItem,
   ExperienceItem,
 } from '../types/portfolio';
 import type { Persona } from '../types/portfolioSchema';
-import { AiApiClient, type ServerHealth, type AiRecommendationsResult } from '../services/aiApiClient.ts';
-import { THEME_CONFIGS } from '../data/themeConfig';
+import { AiApiClient, type ServerHealth } from '../services/aiApiClient.ts';
 import {
   getDisciplineConfig,
   type DisciplineConfig,
 } from '../config/disciplines.ts';
+import { SplitCustomizer } from './SplitCustomizer';
+import { usePortfolioStore } from '../store/portfolioStore';
 
 export type StepperStep = 'details' | 'generate' | 'customize' | 'download_publish';
 
@@ -83,6 +72,20 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
   const [history, setHistory] = useState<PortfolioData[]>([portfolio]);
   const [future, setFuture] = useState<PortfolioData[]>([]);
 
+  // Synchronize Zustand portfolioStore with CreatorStudio
+  useEffect(() => {
+    if (isOpen && portfolio) {
+      usePortfolioStore.getState().setPortfolio(portfolio, true);
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    const unsub = usePortfolioStore.subscribe((state) => {
+      onUpdatePortfolio(state.portfolio);
+    });
+    return () => unsub();
+  }, [onUpdatePortfolio]);
+
   // Server & Model Status
   const [serverHealth, setServerHealth] = useState<ServerHealth | null>(null);
 
@@ -100,9 +103,8 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
   const [userLocation, setUserLocation] = useState(portfolio.location || '');
   const [userEmail, setUserEmail] = useState(portfolio.email || '');
 
-  // Sub-tabs for Step 1 (Details) and Step 3 (Customize)
+  // Sub-tabs for Step 1 (Details)
   const [detailsSubTab, setDetailsSubTab] = useState<'persona_discipline' | 'skills' | 'projects' | 'education' | 'experience'>('persona_discipline');
-  const [customizeSubTab, setCustomizeSubTab] = useState<'sections' | 'rewriter' | 'themes' | 'chat'>('sections');
 
   // Interactive Skills State
   const [skillsList, setSkillsList] = useState<TechSkill[]>(portfolio.skills || []);
@@ -145,41 +147,6 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
   } | null>(null);
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
-
-  // Conversational Assistant State
-  const [chatInput, setChatInput] = useState('');
-  const [isChatting, setIsChatting] = useState(false);
-  const [chatMessages, setChatMessages] = useState<
-    Array<{ sender: 'user' | 'assistant'; text: string; timestamp: string; liveAi?: boolean }>
-  >([
-    {
-      sender: 'assistant',
-      text: `Hello! I'm your AI Portfolio Co-Pilot. I can help tailor your 3D portfolio for ${activeDiscipline.label}, rewrite bios, prioritize capstone projects, or adjust visual themes.`,
-      timestamp: 'Now',
-    },
-  ]);
-  const [pendingChatProfile, setPendingChatProfile] = useState<{
-    profile: PortfolioData;
-    explanation: string;
-    summary: string;
-  } | null>(null);
-
-  // Section Rewriter & Tone State
-  const [rewriteTarget, setRewriteTarget] = useState<'tagline' | 'shortBio' | 'fullBio' | 'targetRole'>('tagline');
-  const [rewriteTone, setRewriteTone] = useState<'professional' | 'creative' | 'concise' | 'impactful' | 'technical'>('professional');
-  const [rewriteCustomInstruction, setRewriteCustomInstruction] = useState('');
-  const [isRewriting, setIsRewriting] = useState(false);
-  const [pendingRewrite, setPendingRewrite] = useState<{
-    section: string;
-    original: string;
-    rewritten: string;
-    explanation: string;
-    liveAi: boolean;
-  } | null>(null);
-
-  // Recommendations State
-  const [isFetchingRecs, setIsFetchingRecs] = useState(false);
-  const [recommendations, setRecommendations] = useState<AiRecommendationsResult | null>(null);
 
   // Public Link & ZIP State
   const [copiedLink, setCopiedLink] = useState(false);
@@ -415,167 +382,6 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
     } finally {
       setIsGenerating(false);
     }
-  };
-
-  // Conversational Assistant Co-Pilot
-  const handleSendChatMessage = async (e?: React.FormEvent, customPrompt?: string) => {
-    if (e) e.preventDefault();
-    const promptToSend = customPrompt || chatInput;
-    if (!promptToSend.trim()) return;
-
-    const userText = promptToSend.trim();
-    setChatInput('');
-    setChatMessages((prev) => [
-      ...prev,
-      { sender: 'user', text: userText, timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) },
-    ]);
-    setIsChatting(true);
-
-    try {
-      const historyPayload = chatMessages.slice(-8).map((m) => ({
-        role: (m.sender === 'user' ? 'user' : 'assistant') as 'user' | 'assistant',
-        content: m.text,
-      }));
-
-      const res = await AiApiClient.chat({
-        instruction: userText,
-        currentProfile: portfolio,
-        messageHistory: historyPayload,
-      });
-
-      setChatMessages((prev) => [
-        ...prev,
-        {
-          sender: 'assistant',
-          text: res.explanation,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          liveAi: res.liveAi,
-        },
-      ]);
-
-      if (res.suggestedFollowUp) {
-        setChatMessages((prev) => [
-          ...prev,
-          {
-            sender: 'assistant',
-            text: `💡 Follow-up: ${res.suggestedFollowUp}`,
-            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            liveAi: res.liveAi,
-          },
-        ]);
-      }
-
-      setPendingChatProfile({
-        profile: res.updatedProfile,
-        explanation: res.explanation,
-        summary: res.changesSummary,
-      });
-    } catch (err: any) {
-      setChatMessages((prev) => [
-        ...prev,
-        {
-          sender: 'assistant',
-          text: `Error processing request: ${err?.message || 'Could not reach AI co-pilot'}`,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        },
-      ]);
-    } finally {
-      setIsChatting(false);
-    }
-  };
-
-  // Accept Co-Pilot changes
-  const handleAcceptChatProposal = () => {
-    if (!pendingChatProfile) return;
-    setHistory((prev) => [...prev, pendingChatProfile.profile]);
-    setFuture([]);
-    onUpdatePortfolio(pendingChatProfile.profile);
-    setSkillsList(pendingChatProfile.profile.skills);
-    setProjectsList(pendingChatProfile.profile.projects);
-    setEducationList(pendingChatProfile.profile.education);
-    setExperienceList(pendingChatProfile.profile.experiences);
-    setPendingChatProfile(null);
-  };
-
-  // Discard Co-Pilot changes
-  const handleDiscardChatProposal = () => {
-    setPendingChatProfile(null);
-  };
-
-  // Rewrite individual section
-  const handleRewriteSection = async () => {
-    setIsRewriting(true);
-    try {
-      const originalContent = portfolio[rewriteTarget] || '';
-      const res = await AiApiClient.rewriteSection({
-        section: rewriteTarget,
-        content: originalContent,
-        tone: rewriteTone,
-        instruction: rewriteCustomInstruction || undefined,
-        role: portfolio.role,
-      });
-
-      setPendingRewrite({
-        section: rewriteTarget,
-        original: String(originalContent),
-        rewritten: String(res.rewritten),
-        explanation: res.explanation,
-        liveAi: res.liveAi,
-      });
-    } catch (err: any) {
-      alert(`Rewrite failed: ${err?.message || 'Unknown error'}`);
-    } finally {
-      setIsRewriting(false);
-    }
-  };
-
-  // Accept section rewrite
-  const handleAcceptRewrite = () => {
-    if (!pendingRewrite) return;
-    const updated = {
-      ...portfolio,
-      [pendingRewrite.section]: pendingRewrite.rewritten,
-    };
-    setHistory((prev) => [...prev, updated]);
-    setFuture([]);
-    onUpdatePortfolio(updated);
-    setPendingRewrite(null);
-  };
-
-  // Fetch role recommendations
-  const handleFetchRecommendations = async () => {
-    setIsFetchingRecs(true);
-    try {
-      const res = await AiApiClient.getRecommendations({
-        profile: portfolio,
-        role: portfolio.role,
-      });
-      setRecommendations(res);
-    } catch (err: any) {
-      alert(`Recommendations check failed: ${err?.message || 'Unknown error'}`);
-    } finally {
-      setIsFetchingRecs(false);
-    }
-  };
-
-  // Apply recommendations
-  const handleApplyRecommendations = () => {
-    if (!recommendations) return;
-    const visibilityUpdate = { ...portfolio.sectionVisibility };
-    recommendations.recommendedSections.forEach((sec) => {
-      if (sec in visibilityUpdate) {
-        (visibilityUpdate as any)[sec] = true;
-      }
-    });
-
-    const updated: PortfolioData = {
-      ...portfolio,
-      sectionOrder: recommendations.priorityOrder as any,
-      sectionVisibility: visibilityUpdate,
-    };
-    setHistory((prev) => [...prev, updated]);
-    setFuture([]);
-    onUpdatePortfolio(updated);
   };
 
   // Add Project Idea into Verified Work
@@ -830,9 +636,9 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
         className="glass-panel"
         style={{
           width: '100%',
-          maxWidth: '1160px',
+          maxWidth: currentStep === 'customize' ? '1420px' : '1160px',
           height: '94vh',
-          maxHeight: '920px',
+          maxHeight: '940px',
           background: 'rgba(9, 13, 22, 0.96)',
           border: '1px solid var(--accent-cyan)',
           boxShadow: '0 0 60px -10px var(--glow-color)',
@@ -1140,7 +946,7 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
         </div>
 
         {/* Tab Body */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '32px' }}>
+        <div style={{ flex: 1, overflowY: 'auto', padding: currentStep === 'customize' ? '16px 20px' : '32px' }}>
           {/* ========================================================================= */}
           {/* STEP 1: DETAILS */}
           {/* ========================================================================= */}
@@ -2457,657 +2263,14 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
           )}
 
           {/* ========================================================================= */}
-          {/* STEP 3: CUSTOMIZE (SECTIONS, TONES, THEMES, CHAT) */}
+          {/* STEP 3: CUSTOMIZE (SPLIT LAYOUT: EDITOR LEFT, LIVE PREVIEW RIGHT) */}
           {/* ========================================================================= */}
           {currentStep === 'customize' && (
-            <div style={{ maxWidth: '840px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '24px' }}>
-              {/* Customize Sub-Tabs */}
-              <div
-                style={{
-                  display: 'flex',
-                  gap: '8px',
-                  borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
-                  paddingBottom: '10px',
-                }}
-              >
-                {[
-                  { id: 'sections' as const, label: 'Section Hierarchy & Toggles', icon: Layers },
-                  { id: 'rewriter' as const, label: 'AI Tone Rewriter', icon: Wand2 },
-                  { id: 'themes' as const, label: 'Visual Themes & 3D Hero', icon: Palette },
-                  { id: 'chat' as const, label: 'Co-Pilot Chat Assistant', icon: MessageSquare },
-                ].map((st) => {
-                  const Icon = st.icon;
-                  const active = customizeSubTab === st.id;
-                  return (
-                    <button
-                      key={st.id}
-                      onClick={() => setCustomizeSubTab(st.id)}
-                      style={{
-                        padding: '8px 14px',
-                        borderRadius: '6px',
-                        background: active ? 'var(--accent-cyan)' : 'rgba(255, 255, 255, 0.05)',
-                        color: active ? '#000' : '#fff',
-                        border: 'none',
-                        fontFamily: 'var(--font-mono)',
-                        fontSize: '0.78rem',
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                      }}
-                    >
-                      <Icon size={13} />
-                      <span>{st.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* SUB-SECTION A: SECTIONS & REORDERING */}
-              {customizeSubTab === 'sections' && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-                  {/* AI Section Recommendation Helper */}
-                  <div
-                    style={{
-                      padding: '20px',
-                      borderRadius: '12px',
-                      background: 'rgba(0, 242, 254, 0.04)',
-                      border: '1px solid rgba(0, 242, 254, 0.2)',
-                    }}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div>
-                        <h5 style={{ fontFamily: 'var(--font-heading)', color: '#fff', fontSize: '1rem', marginBottom: '2px' }}>
-                          Persona Section Recommendation
-                        </h5>
-                        <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', margin: 0 }}>
-                          Tailored for <strong>{portfolio.role.toUpperCase()}</strong>: {activeDiscipline.personaSectionEmphasis[portfolio.persona as Persona]?.join(' → ') || 'Standard Layout'}
-                        </p>
-                      </div>
-                      <button
-                        onClick={handleFetchRecommendations}
-                        disabled={isFetchingRecs}
-                        className="btn-primary"
-                        style={{ padding: '8px 16px', fontSize: '0.8rem' }}
-                      >
-                        <Wand2 size={14} />
-                        <span>{isFetchingRecs ? 'Analyzing...' : 'Audit Hierarchy'}</span>
-                      </button>
-                    </div>
-
-                    {recommendations && (
-                      <div style={{ marginTop: '14px', paddingTop: '12px', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
-                        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '10px' }}>
-                          {recommendations.priorityOrder.map((sec, idx) => (
-                            <span
-                              key={sec}
-                              style={{
-                                padding: '4px 8px',
-                                borderRadius: '4px',
-                                background: 'rgba(255, 255, 255, 0.06)',
-                                fontSize: '0.72rem',
-                                fontFamily: 'var(--font-mono)',
-                                color: '#fff',
-                              }}
-                            >
-                              {idx + 1}. {sec.toUpperCase()}
-                            </span>
-                          ))}
-                        </div>
-                        <button
-                          onClick={handleApplyRecommendations}
-                          className="btn-primary"
-                          style={{ padding: '6px 12px', fontSize: '0.78rem' }}
-                        >
-                          <Check size={12} />
-                          <span>Apply Recommended Order</span>
-                        </button>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Manual Section Reordering List */}
-                  <div>
-                    <h5 style={{ fontFamily: 'var(--font-heading)', color: '#fff', fontSize: '1.05rem', marginBottom: '12px' }}>
-                      Reorder Sections & Toggle Visibility
-                    </h5>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                      {(() => {
-                        const defaultOrder: Array<keyof PortfolioData['sectionVisibility']> = [
-                          'hero', 'welcome', 'about', 'skills', 'projects', 'experience', 'education', 'certifications', 'publications', 'services', 'testimonials', 'contact'
-                        ];
-                        const activeOrder = (portfolio.sectionOrder as Array<keyof PortfolioData['sectionVisibility']>) || defaultOrder;
-                        return activeOrder.map((secKey, idx) => {
-                          const visible = portfolio.sectionVisibility[secKey] ?? true;
-                          return (
-                            <div
-                              key={secKey}
-                              style={{
-                                padding: '12px 18px',
-                                borderRadius: '8px',
-                                background: 'rgba(255, 255, 255, 0.03)',
-                                border: '1px solid rgba(255, 255, 255, 0.08)',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'space-between',
-                              }}
-                            >
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--accent-cyan)', width: '22px' }}>
-                                  #{idx + 1}
-                                </span>
-                                <span style={{ textTransform: 'uppercase', fontFamily: 'var(--font-mono)', fontSize: '0.85rem', color: '#fff' }}>
-                                  {secKey} SECTION
-                                </span>
-                              </div>
-
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <button
-                                  disabled={idx === 0}
-                                  onClick={() => {
-                                    const newOrder = [...activeOrder];
-                                    const temp = newOrder[idx - 1];
-                                    newOrder[idx - 1] = newOrder[idx];
-                                    newOrder[idx] = temp;
-                                    const updated = { ...portfolio, sectionOrder: newOrder };
-                                    setHistory((prev) => [...prev, updated]);
-                                    setFuture([]);
-                                    onUpdatePortfolio(updated);
-                                  }}
-                                  style={{
-                                    background: idx === 0 ? 'transparent' : 'rgba(255, 255, 255, 0.06)',
-                                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                                    color: idx === 0 ? 'rgba(255, 255, 255, 0.2)' : '#ffffff',
-                                    borderRadius: '6px',
-                                    padding: '6px 10px',
-                                    cursor: idx === 0 ? 'not-allowed' : 'pointer',
-                                    fontSize: '0.72rem',
-                                    fontFamily: 'var(--font-mono)',
-                                  }}
-                                >
-                                  <ArrowUp size={12} />
-                                </button>
-
-                                <button
-                                  disabled={idx === activeOrder.length - 1}
-                                  onClick={() => {
-                                    const newOrder = [...activeOrder];
-                                    const temp = newOrder[idx + 1];
-                                    newOrder[idx + 1] = newOrder[idx];
-                                    newOrder[idx] = temp;
-                                    const updated = { ...portfolio, sectionOrder: newOrder };
-                                    setHistory((prev) => [...prev, updated]);
-                                    setFuture([]);
-                                    onUpdatePortfolio(updated);
-                                  }}
-                                  style={{
-                                    background: idx === activeOrder.length - 1 ? 'transparent' : 'rgba(255, 255, 255, 0.06)',
-                                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                                    color: idx === activeOrder.length - 1 ? 'rgba(255, 255, 255, 0.2)' : '#ffffff',
-                                    borderRadius: '6px',
-                                    padding: '6px 10px',
-                                    cursor: idx === activeOrder.length - 1 ? 'not-allowed' : 'pointer',
-                                    fontSize: '0.72rem',
-                                    fontFamily: 'var(--font-mono)',
-                                  }}
-                                >
-                                  <ArrowDown size={12} />
-                                </button>
-
-                                <button
-                                  onClick={() => {
-                                    const updated = {
-                                      ...portfolio,
-                                      sectionVisibility: {
-                                        ...portfolio.sectionVisibility,
-                                        [secKey]: !visible,
-                                      },
-                                    };
-                                    setHistory((prev) => [...prev, updated]);
-                                    setFuture([]);
-                                    onUpdatePortfolio(updated);
-                                  }}
-                                  style={{
-                                    background: visible ? 'rgba(0, 242, 254, 0.12)' : 'rgba(255, 255, 255, 0.03)',
-                                    border: visible ? '1px solid var(--accent-cyan)' : '1px solid rgba(255, 255, 255, 0.1)',
-                                    color: visible ? 'var(--accent-cyan)' : 'rgba(255, 255, 255, 0.3)',
-                                    borderRadius: '6px',
-                                    padding: '6px 10px',
-                                    cursor: 'pointer',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '6px',
-                                    fontSize: '0.72rem',
-                                    fontFamily: 'var(--font-mono)',
-                                  }}
-                                >
-                                  {visible ? <Eye size={12} /> : <EyeOff size={12} />}
-                                  <span>{visible ? 'VISIBLE' : 'HIDDEN'}</span>
-                                </button>
-                              </div>
-                            </div>
-                          );
-                        });
-                      })()}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* SUB-SECTION B: AI SECTION REWRITER */}
-              {customizeSubTab === 'rewriter' && (
-                <div
-                  style={{
-                    padding: '24px',
-                    borderRadius: '14px',
-                    background: 'rgba(255, 255, 255, 0.02)',
-                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                  }}
-                >
-                  <h4 style={{ fontFamily: 'var(--font-heading)', color: '#fff', fontSize: '1.2rem', marginBottom: '6px' }}>
-                    Regenerate Content in a Specific Tone
-                  </h4>
-                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.82rem', marginBottom: '16px' }}>
-                    Rewrite your tagline, short bio, or full biography without altering your verified facts.
-                  </p>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '14px' }}>
-                    <div>
-                      <label style={{ display: 'block', fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--accent-cyan)', marginBottom: '6px' }}>
-                        TARGET FIELD
-                      </label>
-                      <select
-                        value={rewriteTarget}
-                        onChange={(e) => setRewriteTarget(e.target.value as any)}
-                        style={{
-                          width: '100%',
-                          padding: '10px 14px',
-                          background: '#04070d',
-                          border: '1px solid rgba(255, 255, 255, 0.15)',
-                          borderRadius: '8px',
-                          color: '#fff',
-                          fontFamily: 'var(--font-body)',
-                          fontSize: '0.9rem',
-                          outline: 'none',
-                        }}
-                      >
-                        <option value="tagline">Tagline / Headline</option>
-                        <option value="shortBio">Short Bio (Hero Summary)</option>
-                        <option value="fullBio">Full Biography (About Section)</option>
-                        <option value="targetRole">Target Role Headline</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label style={{ display: 'block', fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--accent-cyan)', marginBottom: '6px' }}>
-                        WRITING TONE
-                      </label>
-                      <select
-                        value={rewriteTone}
-                        onChange={(e) => setRewriteTone(e.target.value as any)}
-                        style={{
-                          width: '100%',
-                          padding: '10px 14px',
-                          background: '#04070d',
-                          border: '1px solid rgba(255, 255, 255, 0.15)',
-                          borderRadius: '8px',
-                          color: '#fff',
-                          fontFamily: 'var(--font-body)',
-                          fontSize: '0.9rem',
-                          outline: 'none',
-                        }}
-                      >
-                        <option value="professional">Professional (Executive & Authoritative)</option>
-                        <option value="impactful">Impactful (Outcome-Driven & High Benchmark)</option>
-                        <option value="concise">Concise (Crisp & Zero Fluff)</option>
-                        <option value="technical">Technical (Rigorous Engineering Terminology)</option>
-                        <option value="creative">Creative (Evocative & Distinctive)</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div style={{ marginBottom: '14px' }}>
-                    <label style={{ display: 'block', fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'rgba(255,255,255,0.6)', marginBottom: '6px' }}>
-                      OPTIONAL GUIDANCE (e.g., "Emphasize CAD precision and FEA verification")
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Custom instruction..."
-                      value={rewriteCustomInstruction}
-                      onChange={(e) => setRewriteCustomInstruction(e.target.value)}
-                      style={{
-                        width: '100%',
-                        padding: '10px 14px',
-                        background: '#04070d',
-                        border: '1px solid rgba(255, 255, 255, 0.15)',
-                        borderRadius: '8px',
-                        color: '#fff',
-                        fontSize: '0.9rem',
-                        outline: 'none',
-                      }}
-                    />
-                  </div>
-
-                  <button
-                    onClick={handleRewriteSection}
-                    disabled={isRewriting}
-                    className="btn-primary"
-                    style={{ padding: '10px 20px', fontSize: '0.85rem' }}
-                  >
-                    <RefreshCw size={14} />
-                    <span>{isRewriting ? 'Rewriting with AI...' : 'Rewrite Section'}</span>
-                  </button>
-
-                  {/* Proposed Rewrite Diff */}
-                  {pendingRewrite && (
-                    <div
-                      style={{
-                        marginTop: '16px',
-                        padding: '16px',
-                        borderRadius: '10px',
-                        background: 'rgba(0, 242, 254, 0.08)',
-                        border: '1px solid var(--accent-cyan)',
-                      }}
-                    >
-                      <div style={{ fontWeight: 700, fontSize: '0.88rem', color: '#fff', marginBottom: '8px' }}>
-                        Proposed Rewritten {pendingRewrite.section}:
-                      </div>
-                      <div
-                        style={{
-                          padding: '12px',
-                          borderRadius: '8px',
-                          background: '#030508',
-                          color: 'var(--accent-cyan)',
-                          fontFamily: 'var(--font-mono)',
-                          fontSize: '0.85rem',
-                          marginBottom: '12px',
-                        }}
-                      >
-                        "{pendingRewrite.rewritten}"
-                      </div>
-                      <div style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.6)', marginBottom: '12px' }}>
-                        {pendingRewrite.explanation}
-                      </div>
-                      <div style={{ display: 'flex', gap: '8px' }}>
-                        <button onClick={handleAcceptRewrite} className="btn-primary" style={{ padding: '6px 14px', fontSize: '0.78rem' }}>
-                          <Check size={14} />
-                          <span>Accept & Apply to Portfolio</span>
-                        </button>
-                        <button
-                          onClick={() => setPendingRewrite(null)}
-                          style={{
-                            background: 'transparent',
-                            border: '1px solid rgba(255,255,255,0.2)',
-                            color: '#fff',
-                            borderRadius: '6px',
-                            padding: '6px 12px',
-                            fontSize: '0.78rem',
-                            cursor: 'pointer',
-                          }}
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* SUB-SECTION C: VISUAL THEMES & 3D HERO */}
-              {customizeSubTab === 'themes' && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
-                  <div>
-                    <h5 style={{ fontFamily: 'var(--font-heading)', color: '#fff', fontSize: '1.2rem', marginBottom: '10px' }}>
-                      Cinematic Themes & Color Palettes
-                    </h5>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '14px' }}>
-                      {(Object.keys(THEME_CONFIGS) as ThemePreset[]).map((thm) => {
-                        const cfg = THEME_CONFIGS[thm];
-                        const selected = portfolio.theme === thm;
-                        return (
-                          <div
-                            key={thm}
-                            onClick={() => {
-                              const updated = { ...portfolio, theme: thm };
-                              setHistory((prev) => [...prev, updated]);
-                              setFuture([]);
-                              onUpdatePortfolio(updated);
-                            }}
-                            style={{
-                              padding: '16px',
-                              borderRadius: '10px',
-                              border: selected ? '2px solid var(--accent-cyan)' : '1px solid rgba(255, 255, 255, 0.1)',
-                              background: selected ? 'rgba(0, 242, 254, 0.08)' : 'rgba(255, 255, 255, 0.03)',
-                              cursor: 'pointer',
-                              display: 'flex',
-                              flexDirection: 'column',
-                              gap: '10px',
-                            }}
-                          >
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                              <span style={{ fontWeight: 700, color: '#fff', fontSize: '0.9rem' }}>{cfg.name}</span>
-                              {selected && <Check size={16} color="var(--accent-cyan)" />}
-                            </div>
-                            <div style={{ display: 'flex', gap: '8px' }}>
-                              <div style={{ width: '22px', height: '22px', borderRadius: '4px', background: cfg.bgPrimary, border: '1px solid #444' }} />
-                              <div style={{ width: '22px', height: '22px', borderRadius: '4px', background: cfg.accentCyan }} />
-                              <div style={{ width: '22px', height: '22px', borderRadius: '4px', background: cfg.accentMagenta }} />
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  <div>
-                    <h5 style={{ fontFamily: 'var(--font-heading)', color: '#fff', fontSize: '1.2rem', marginBottom: '10px' }}>
-                      Hero 3D Visualization Mode
-                    </h5>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
-                      {[
-                        { id: 'kinetic_360' as const, label: 'Kinetic 360', desc: 'Canvas frame scrubber with cursor tracking' },
-                        { id: 'hologram_core' as const, label: 'Hologram Core', desc: 'Cyan holographic particle core' },
-                        { id: 'cyber_wireframe' as const, label: 'Cyber Grid', desc: 'Minimalist high-contrast tech mesh' },
-                      ].map((mode) => {
-                        const selected = portfolio.hero3DMode === mode.id;
-                        return (
-                          <div
-                            key={mode.id}
-                            onClick={() => {
-                              const updated = { ...portfolio, hero3DMode: mode.id as Hero3DMode };
-                              setHistory((prev) => [...prev, updated]);
-                              setFuture([]);
-                              onUpdatePortfolio(updated);
-                            }}
-                            style={{
-                              padding: '14px',
-                              borderRadius: '8px',
-                              border: selected ? '2px solid var(--accent-cyan)' : '1px solid rgba(255, 255, 255, 0.1)',
-                              background: selected ? 'rgba(0, 242, 254, 0.08)' : 'rgba(255, 255, 255, 0.02)',
-                              cursor: 'pointer',
-                            }}
-                          >
-                            <div style={{ fontWeight: 700, color: selected ? 'var(--accent-cyan)' : '#fff', marginBottom: '4px', fontSize: '0.85rem' }}>
-                              {mode.label}
-                            </div>
-                            <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>{mode.desc}</div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* SUB-SECTION D: CO-PILOT CHAT ASSISTANT */}
-              {customizeSubTab === 'chat' && (
-                <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-                  {/* Quick Pills */}
-                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '14px' }}>
-                    {[
-                      `Align portfolio with ${activeDiscipline.shortName} standards`,
-                      'Make full bio more punchy and concise',
-                      'Prioritize verified capstone projects',
-                      'Switch theme to Obsidian Stealth',
-                    ].map((pill, i) => (
-                      <button
-                        key={i}
-                        onClick={() => handleSendChatMessage(undefined, pill)}
-                        style={{
-                          background: 'rgba(255, 255, 255, 0.04)',
-                          border: '1px solid rgba(255, 255, 255, 0.12)',
-                          borderRadius: '999px',
-                          padding: '4px 10px',
-                          color: 'rgba(255, 255, 255, 0.8)',
-                          fontFamily: 'var(--font-mono)',
-                          fontSize: '0.72rem',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        + {pill}
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* Proposed Mutation Diff Banner */}
-                  {pendingChatProfile && (
-                    <div
-                      style={{
-                        padding: '14px 18px',
-                        borderRadius: '10px',
-                        background: 'rgba(0, 242, 254, 0.1)',
-                        border: '1px solid var(--accent-cyan)',
-                        marginBottom: '14px',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '8px',
-                      }}
-                    >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div style={{ fontWeight: 700, color: '#fff', fontSize: '0.85rem' }}>
-                          Proposed: {pendingChatProfile.summary}
-                        </div>
-                        <div style={{ display: 'flex', gap: '6px' }}>
-                          <button
-                            onClick={handleAcceptChatProposal}
-                            className="btn-primary"
-                            style={{ padding: '6px 12px', fontSize: '0.75rem' }}
-                          >
-                            <Check size={12} />
-                            <span>Apply</span>
-                          </button>
-                          <button
-                            onClick={handleDiscardChatProposal}
-                            style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', borderRadius: '6px', padding: '6px 10px', fontSize: '0.75rem', cursor: 'pointer' }}
-                          >
-                            Discard
-                          </button>
-                        </div>
-                      </div>
-                      <div style={{ fontSize: '0.78rem', color: 'rgba(255, 255, 255, 0.75)' }}>
-                        {pendingChatProfile.explanation}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Chat Messages Log */}
-                  <div
-                    style={{
-                      maxHeight: '340px',
-                      overflowY: 'auto',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '12px',
-                      padding: '14px',
-                      background: 'rgba(5, 7, 11, 0.5)',
-                      borderRadius: '10px',
-                      border: '1px solid rgba(255, 255, 255, 0.08)',
-                      marginBottom: '14px',
-                    }}
-                  >
-                    {chatMessages.map((msg, i) => (
-                      <div
-                        key={i}
-                        style={{
-                          alignSelf: msg.sender === 'user' ? 'flex-end' : 'flex-start',
-                          maxWidth: '82%',
-                          padding: '10px 14px',
-                          borderRadius: '10px',
-                          background: msg.sender === 'user' ? 'rgba(0, 242, 254, 0.15)' : 'rgba(255, 255, 255, 0.05)',
-                          border: msg.sender === 'user' ? '1px solid var(--accent-cyan)' : '1px solid rgba(255, 255, 255, 0.1)',
-                          color: '#ffffff',
-                          fontSize: '0.85rem',
-                          lineHeight: 1.5,
-                        }}
-                      >
-                        <div style={{ marginBottom: '4px', display: 'flex', justifyContent: 'space-between', gap: '8px' }}>
-                          <span
-                            style={{
-                              fontFamily: 'var(--font-mono)',
-                              fontSize: '0.65rem',
-                              color: msg.sender === 'user' ? 'var(--accent-cyan)' : 'var(--accent-magenta)',
-                              textTransform: 'uppercase',
-                            }}
-                          >
-                            {msg.sender === 'user' ? 'You' : `AI Co-Pilot ${msg.liveAi ? '(OpenAI)' : '(Offline)'}`}
-                          </span>
-                          <span style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.4)' }}>{msg.timestamp}</span>
-                        </div>
-                        <div>{msg.text}</div>
-                      </div>
-                    ))}
-                    {isChatting && (
-                      <div style={{ color: 'var(--accent-cyan)', fontFamily: 'var(--font-mono)', fontSize: '0.78rem' }}>
-                        AI Co-Pilot is processing instructions...
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Input Form */}
-                  <form onSubmit={handleSendChatMessage} style={{ display: 'flex', gap: '10px' }}>
-                    <input
-                      type="text"
-                      placeholder="Instruct co-pilot (e.g. 'Highlight ANSYS FEA simulation')..."
-                      value={chatInput}
-                      onChange={(e) => setChatInput(e.target.value)}
-                      style={{
-                        flex: 1,
-                        padding: '10px 14px',
-                        background: 'rgba(5, 7, 11, 0.8)',
-                        border: '1px solid rgba(255, 255, 255, 0.15)',
-                        borderRadius: '8px',
-                        color: '#ffffff',
-                        fontSize: '0.9rem',
-                        outline: 'none',
-                      }}
-                    />
-                    <button type="submit" disabled={isChatting} className="btn-primary" style={{ padding: '10px 16px' }}>
-                      <Send size={15} />
-                    </button>
-                  </form>
-                </div>
-              )}
-
-              {/* Navigation */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '16px', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '16px' }}>
-                <button
-                  type="button"
-                  onClick={() => setCurrentStep('generate')}
-                  style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', padding: '10px 18px', borderRadius: '8px', cursor: 'pointer' }}
-                >
-                  ← Back to Generate
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setCurrentStep('download_publish')}
-                  className="btn-primary"
-                  style={{ padding: '10px 24px' }}
-                >
-                  <span>Proceed to Step 4: Download / Publish</span>
-                  <ArrowRight size={16} />
-                </button>
-              </div>
+            <div style={{ width: '100%', height: '100%', minHeight: '620px' }}>
+              <SplitCustomizer
+                onBackToStep2={() => setCurrentStep('generate')}
+                onProceedToStep4={() => setCurrentStep('download_publish')}
+              />
             </div>
           )}
 
