@@ -195,7 +195,8 @@ body::before {
   font-family: var(--font-heading);
   font-weight: 600;
   letter-spacing: 0.05em;
-  background: linear-gradient(135deg, var(--accent-cyan) 0%, #00a8ff 100%);
+  background-color: var(--accent-cyan);
+  background-image: linear-gradient(135deg, var(--accent-cyan) 0%, #00a8ff 100%);
   color: #030712;
   border: none;
   border-radius: 8px;
@@ -372,8 +373,8 @@ section {
 
 .stepper-circle.upcoming {
   background: rgba(255, 255, 255, 0.05);
-  color: rgba(255, 255, 255, 0.4);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.15);
 }
 
 /* Shimmer Skeleton Loading */

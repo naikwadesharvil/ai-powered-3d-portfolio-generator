@@ -89,7 +89,7 @@ export const ContactSection: React.FC<ContactSectionProps> = ({ portfolio }) => 
               <FrameScrubber
                 folderPath="/assets/image_2"
                 totalFrames={36}
-                fallbackImage="/assets/image_2/telephone_smoke.jpg"
+                fallbackImage="/assets/image_2/telephone_smoke.webp"
                 mode="cursor"
                 fit="cover"
                 overlayTelemetry={true}

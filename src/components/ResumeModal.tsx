@@ -845,3 +845,5 @@ export const ResumeModal: React.FC<ResumeModalProps> = ({ portfolio: initialPort
     </div>
   );
 };
+
+export default ResumeModal;

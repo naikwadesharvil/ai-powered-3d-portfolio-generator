@@ -797,3 +797,5 @@ export const SplitCustomizer: React.FC<SplitCustomizerProps> = ({
   );
 };
 
+export default SplitCustomizer;
+

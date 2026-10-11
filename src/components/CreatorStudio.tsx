@@ -44,7 +44,6 @@ import {
   getDisciplineConfig,
   type DisciplineConfig,
 } from '../config/disciplines.ts';
-import { SplitCustomizer } from './SplitCustomizer';
 import { usePortfolioStore } from '../store/portfolioStore';
 import {
   generateResumeHtml,
@@ -55,6 +54,8 @@ import {
   downloadResumePdf,
   downloadResumeDocx,
 } from '../services/resumeService';
+
+import SplitCustomizer from './SplitCustomizer';
 
 export type StepperStep = 'details' | 'generate' | 'customize' | 'download_publish';
 
@@ -77,6 +78,7 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
   onChangePreviewMode,
   onOpenResume,
 }) => {
+  console.log('[DEBUG] CreatorStudio component executing!');
   // 4-Step Stepper Flow: Details -> Generate -> Customize -> Download/Publish
   const [currentStep, setCurrentStep] = useState<StepperStep>('details');
   const [history, setHistory] = useState<PortfolioData[]>([portfolio]);
@@ -864,7 +866,7 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
                 border: '1px solid rgba(255, 255, 255, 0.12)',
                 borderRadius: '8px',
                 padding: '8px 12px',
-                color: history.length > 1 ? '#ffffff' : 'rgba(255, 255, 255, 0.3)',
+                color: history.length > 1 ? '#ffffff' : 'rgba(255, 255, 255, 0.55)',
                 cursor: history.length > 1 ? 'pointer' : 'not-allowed',
                 display: 'flex',
                 alignItems: 'center',
@@ -885,7 +887,7 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
                 border: '1px solid rgba(255, 255, 255, 0.12)',
                 borderRadius: '8px',
                 padding: '8px 12px',
-                color: future.length > 0 ? '#ffffff' : 'rgba(255, 255, 255, 0.3)',
+                color: future.length > 0 ? '#ffffff' : 'rgba(255, 255, 255, 0.55)',
                 cursor: future.length > 0 ? 'pointer' : 'not-allowed',
                 display: 'flex',
                 alignItems: 'center',
@@ -2725,3 +2727,5 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
     </div>
   );
 };
+
+export default CreatorStudio;

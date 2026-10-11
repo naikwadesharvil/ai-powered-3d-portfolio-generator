@@ -131,7 +131,7 @@ export const WelcomeTransition: React.FC<WelcomeTransitionProps> = ({ portfolio 
               <FrameScrubber
                 folderPath="/assets/image_3"
                 totalFrames={36}
-                fallbackImage="/assets/image_3/laptop_interface.jpg"
+                fallbackImage="/assets/image_3/laptop_interface.webp"
                 mode="scroll"
                 fit="cover"
                 overlayTelemetry={true}

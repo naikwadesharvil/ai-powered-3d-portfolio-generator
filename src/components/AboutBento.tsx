@@ -210,7 +210,7 @@ ${portfolio.publications.map((pb) => `- ${pb.title} | ${pb.publisher} (${pb.date
                   fallbackImage={
                     portfolio.avatarUrl && portfolio.avatarUrl !== '/assets/profile.png'
                       ? portfolio.avatarUrl
-                      : '/assets/image_1/hero_front.jpg'
+                      : '/assets/image_1/hero_front.webp'
                   }
                   mode="scroll"
                   fit="cover"

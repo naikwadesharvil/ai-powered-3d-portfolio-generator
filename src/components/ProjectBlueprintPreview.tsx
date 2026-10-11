@@ -42,6 +42,8 @@ export const ProjectBlueprintPreview: React.FC<ProjectBlueprintPreviewProps> = (
         <img
           src={project.imageUrl}
           alt={`${project.title} project illustration preview`}
+          width={600}
+          height={340}
           loading="lazy"
           onError={() => setImgError(true)}
           style={{ width: '100%', height: '100%', objectFit: 'cover' }}

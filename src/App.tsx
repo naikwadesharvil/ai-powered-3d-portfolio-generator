@@ -12,11 +12,12 @@ import { ExperienceServices } from './components/ExperienceServices';
 import { CertificationsPublications } from './components/CertificationsPublications';
 import { ContactSection } from './components/ContactSection';
 import { Footer } from './components/Footer';
-import { CreatorStudio } from './components/CreatorStudio';
-import { ResumeModal } from './components/ResumeModal';
 import { NotFoundPage } from './components/NotFoundPage';
 import { usePortfolioStore } from './store/portfolioStore';
 import { themeTokensToCssVars } from './types/themeTokens';
+
+import CreatorStudio from './components/CreatorStudio';
+const ResumeModal = React.lazy(() => import('./components/ResumeModal'));
 
 export function App() {
   const portfolio = usePortfolioStore((s) => s.portfolio);
@@ -147,7 +148,8 @@ export function App() {
         <button
           onClick={() => setIsStudioOpen(true)}
           style={{
-            background: 'linear-gradient(135deg, var(--accent-cyan) 0%, var(--accent-magenta) 100%)',
+            backgroundColor: 'var(--accent-cyan)',
+            backgroundImage: 'linear-gradient(135deg, var(--accent-cyan) 0%, var(--accent-magenta) 100%)',
             border: 'none',
             borderRadius: '9999px',
             padding: '6px 14px',
@@ -263,22 +265,28 @@ export function App() {
       </div>
 
       {/* Layer A: Portfolio Creator Studio Modal */}
-      <CreatorStudio
-        isOpen={isStudioOpen}
-        onClose={() => setIsStudioOpen(false)}
-        portfolio={portfolio}
-        onUpdatePortfolio={handleUpdatePortfolio}
-        previewMode={previewMode}
-        onChangePreviewMode={setPreviewMode}
-        onOpenResume={() => setIsResumeOpen(true)}
-      />
+      {isStudioOpen && (
+        <CreatorStudio
+          isOpen={isStudioOpen}
+          onClose={() => setIsStudioOpen(false)}
+          portfolio={portfolio}
+          onUpdatePortfolio={handleUpdatePortfolio}
+          previewMode={previewMode}
+          onChangePreviewMode={setPreviewMode}
+          onOpenResume={() => setIsResumeOpen(true)}
+        />
+      )}
 
       {/* Layer B: Professional ATS Resume Studio & Preview Modal */}
-      <ResumeModal
-        isOpen={isResumeOpen}
-        onClose={() => setIsResumeOpen(false)}
-        portfolio={portfolio}
-      />
+      {isResumeOpen && (
+        <React.Suspense fallback={null}>
+          <ResumeModal
+            isOpen={isResumeOpen}
+            onClose={() => setIsResumeOpen(false)}
+            portfolio={portfolio}
+          />
+        </React.Suspense>
+      )}
     </div>
   );
 }

@@ -28,7 +28,7 @@ export const FrameScrubber: React.FC<FrameScrubberProps> = ({
   folderPath,
   totalFrames = 36,
   fallbackImage,
-  fileNamePattern = (i) => `frame_${String(i).padStart(3, '0')}.jpg`,
+  fileNamePattern = (i) => `frame_${String(i).padStart(3, '0')}.webp`,
   mode,
   fit = 'cover',
   overlayTelemetry = false,
@@ -57,50 +57,114 @@ export const FrameScrubber: React.FC<FrameScrubberProps> = ({
   const idleAngleRef = useRef(0);
   const lastInteractionTimeRef = useRef(Date.now());
 
-  // 1. Preload frame sequence and fallback image
+  // 1. Progressive frame streaming with Viewport Intersection guard
   useEffect(() => {
     let isMounted = true;
-    const loadedImages: HTMLImageElement[] = [];
-    let count = 0;
+    let streamTimer: any = null;
 
-    // Load Fallback First
+    // Load Fallback and Frame 1 First
     const fb = new Image();
     fb.src = fallbackImage;
     fb.onload = () => {
-      fallbackImgRef.current = fb;
+      if (isMounted) fallbackImgRef.current = fb;
     };
     fb.onerror = () => {
       console.warn(`[FrameScrubber] Fallback image failed to load: ${fallbackImage}`);
     };
 
-    // Preload Numbered Frames
-    for (let i = 1; i <= totalFrames; i++) {
-      const img = new Image();
-      const fileName = fileNamePattern(i);
-      img.src = `${folderPath.replace(/\/$/, '')}/${fileName}`;
+    // Allocate array slots for all frames
+    const loadedImages: HTMLImageElement[] = new Array(totalFrames);
+    imagesRef.current = loadedImages;
 
+    // Helper to load a specific frame index (1-based)
+    const loadFrame = (idx: number, onComplete?: () => void) => {
+      const img = new Image();
+      const fileName = fileNamePattern(idx);
+      img.src = `${folderPath.replace(/\/$/, '')}/${fileName}`;
       img.onload = () => {
         if (!isMounted) return;
-        count++;
-        setLoadedCount(count);
+        loadedImages[idx - 1] = img;
+        setLoadedCount((prev) => prev + 1);
+        if (onComplete) onComplete();
       };
-
       img.onerror = () => {
-        // Fallback to the base image for this frame if numbered frame is missing
-        if (!img.src.includes(fallbackImage)) {
+        // Fallback to jpg or fallback image if webp fails
+        if (img.src.endsWith('.webp')) {
+          img.src = img.src.replace(/\.webp$/, '.jpg');
+        } else if (!img.src.includes(fallbackImage)) {
           img.src = fallbackImage;
         }
       };
+      return img;
+    };
 
-      loadedImages.push(img);
+    // Load Frame 1 immediately (critical for initial paint / LCP)
+    loadFrame(1, () => {
+      // Once frame 1 is ready, load nearby key frames (e.g. frame 18 and 36)
+      if (!isMounted) return;
+      loadFrame(Math.min(totalFrames, Math.round(totalFrames / 2)));
+      loadFrame(totalFrames);
+    });
+
+    // Start background progressive streaming for the rest of the sequence
+    const startStreamingRemainingFrames = () => {
+      let nextFrame = 2;
+      const stepStream = () => {
+        if (!isMounted) return;
+        // Skip frames already loaded
+        while (nextFrame <= totalFrames && loadedImages[nextFrame - 1]) {
+          nextFrame++;
+        }
+        if (nextFrame > totalFrames) return;
+
+        // Load 2 frames per chunk to avoid thread congestion
+        const f1 = nextFrame++;
+        loadFrame(f1);
+        if (nextFrame <= totalFrames && !loadedImages[nextFrame - 1]) {
+          const f2 = nextFrame++;
+          loadFrame(f2);
+        }
+
+        if (nextFrame <= totalFrames) {
+          if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+            (window as any).requestIdleCallback(stepStream, { timeout: 200 });
+          } else {
+            streamTimer = setTimeout(stepStream, 60);
+          }
+        }
+      };
+
+      // Delay non-critical background streaming slightly to let initial paint settle
+      streamTimer = setTimeout(stepStream, 150);
+    };
+
+    // If hero cursor mode, start background streaming after initial render
+    // If scroll mode (below the fold), defer streaming until in/near viewport
+    if (mode === 'cursor') {
+      startStreamingRemainingFrames();
+    } else {
+      const container = containerRef.current;
+      if (typeof IntersectionObserver !== 'undefined' && container) {
+        const observer = new IntersectionObserver(
+          (entries) => {
+            if (entries[0]?.isIntersecting) {
+              startStreamingRemainingFrames();
+              observer.disconnect();
+            }
+          },
+          { rootMargin: '300px' }
+        );
+        observer.observe(container);
+      } else {
+        startStreamingRemainingFrames();
+      }
     }
-
-    imagesRef.current = loadedImages;
 
     return () => {
       isMounted = false;
+      if (streamTimer) clearTimeout(streamTimer);
     };
-  }, [folderPath, totalFrames, fallbackImage, fileNamePattern]);
+  }, [folderPath, totalFrames, fallbackImage, fileNamePattern, mode]);
 
   // 2. Cursor Scrubbing (Hero Mode)
   useEffect(() => {
@@ -265,8 +329,23 @@ export const FrameScrubber: React.FC<FrameScrubberProps> = ({
           ctx.scale(dpr, dpr);
           ctx.clearRect(0, 0, displayWidth, displayHeight);
 
-          // Get image corresponding to frameIdx
-          const activeImg = imagesRef.current[frameIdx - 1] || fallbackImgRef.current;
+          // Get image corresponding to frameIdx (or closest loaded frame)
+          let activeImg: HTMLImageElement | null = imagesRef.current[frameIdx - 1] || null;
+          if (!activeImg || !activeImg.complete || activeImg.naturalWidth === 0) {
+            let closest: HTMLImageElement | null = null;
+            let minDiff = Infinity;
+            for (let i = 0; i < imagesRef.current.length; i++) {
+              const cand = imagesRef.current[i];
+              if (cand && cand.complete && cand.naturalWidth > 0) {
+                const diff = Math.abs(i - (frameIdx - 1));
+                if (diff < minDiff) {
+                  minDiff = diff;
+                  closest = cand;
+                }
+              }
+            }
+            activeImg = closest || fallbackImgRef.current;
+          }
 
           if (activeImg && activeImg.complete && activeImg.naturalWidth > 0) {
             // Aspect-ratio cover/contain calculation without distortion
@@ -391,6 +470,8 @@ export const FrameScrubber: React.FC<FrameScrubberProps> = ({
         <img
           src={fallbackImage}
           alt={telemetryLabel || '3D portrait preview'}
+          width={800}
+          height={600}
           loading="lazy"
           style={{ width: '100%', height: '100%', objectFit: 'cover' }}
         />
@@ -447,7 +528,7 @@ export const FrameScrubber: React.FC<FrameScrubberProps> = ({
             <div>
               MODE: <span style={{ color: '#fff' }}>{mode.toUpperCase()} SCRUB</span> // {fps} FPS
             </div>
-            <div style={{ color: 'rgba(255, 255, 255, 0.45)' }}>
+            <div style={{ color: 'rgba(255, 255, 255, 0.68)' }}>
               COORD: [{(mouseCoords.x).toFixed(2)}, {(mouseCoords.y).toFixed(2)}] // {isInteracting ? 'ACTIVE' : 'IDLE'}
             </div>
           </div>

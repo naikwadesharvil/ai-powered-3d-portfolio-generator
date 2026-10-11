@@ -92,7 +92,7 @@ export const Hero3D: React.FC<Hero3DProps> = ({ portfolio }) => {
         <div style={{ color: 'var(--text-secondary)' }}>
           DISCIPLINE: <span style={{ color: '#fff' }}>{portfolio.branchName ? portfolio.branchName.toUpperCase() : (portfolio.branch || 'ENGINEERING').toUpperCase()}</span>
         </div>
-        <div style={{ color: 'rgba(255, 255, 255, 0.45)', fontSize: '0.65rem' }}>
+        <div style={{ color: 'rgba(255, 255, 255, 0.68)', fontSize: '0.65rem' }}>
           FRAME SCRUBBER: 360° CURSOR ENGINE ACTIVE
         </div>
       </div>
@@ -131,7 +131,7 @@ export const Hero3D: React.FC<Hero3DProps> = ({ portfolio }) => {
           <span>60 FPS [RENDER PIPELINE]</span>
           <Activity size={12} color="var(--accent-cyan)" />
         </div>
-        <div style={{ color: 'rgba(255, 255, 255, 0.45)', fontSize: '0.65rem' }}>
+        <div style={{ color: 'rgba(255, 255, 255, 0.68)', fontSize: '0.65rem' }}>
           THEME: {portfolio.theme.toUpperCase()}
         </div>
       </div>
@@ -167,7 +167,7 @@ export const Hero3D: React.FC<Hero3DProps> = ({ portfolio }) => {
             <FrameScrubber
               folderPath="/assets/image_1"
               totalFrames={36}
-              fallbackImage="/assets/image_1/hero_front.jpg"
+              fallbackImage="/assets/image_1/hero_front.webp"
               mode="cursor"
               fit="cover"
               overlayTelemetry={true}
@@ -271,7 +271,8 @@ export const Hero3D: React.FC<Hero3DProps> = ({ portfolio }) => {
           <a
             href="#projects"
             style={{
-              background: 'linear-gradient(135deg, var(--accent-cyan) 0%, var(--accent-magenta) 100%)',
+              backgroundColor: '#00f2fe',
+              backgroundImage: 'linear-gradient(135deg, var(--accent-cyan) 0%, var(--accent-magenta) 100%)',
               color: '#000',
               fontWeight: 700,
               fontFamily: 'var(--font-heading)',
