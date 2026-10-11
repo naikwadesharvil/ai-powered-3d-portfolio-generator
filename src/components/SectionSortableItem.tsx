@@ -49,7 +49,33 @@ export const SectionSortableItem: React.FC<SectionSortableItemProps> = ({
     updateProjectItem,
     updateSkillItem,
     activeTone,
+    reorderSections,
   } = usePortfolioStore();
+
+  const currentOrder = portfolio.sectionOrder || ['hero', 'welcome', 'about', 'projects', 'experience', 'publications', 'contact'];
+  const currentIndex = currentOrder.indexOf(id);
+  const canMoveUp = currentIndex > 0;
+  const canMoveDown = currentIndex >= 0 && currentIndex < currentOrder.length - 1;
+
+  const handleMoveUp = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!canMoveUp) return;
+    const newOrder = [...currentOrder];
+    const temp = newOrder[currentIndex - 1];
+    newOrder[currentIndex - 1] = newOrder[currentIndex];
+    newOrder[currentIndex] = temp;
+    reorderSections(newOrder);
+  };
+
+  const handleMoveDown = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!canMoveDown) return;
+    const newOrder = [...currentOrder];
+    const temp = newOrder[currentIndex + 1];
+    newOrder[currentIndex + 1] = newOrder[currentIndex];
+    newOrder[currentIndex] = temp;
+    reorderSections(newOrder);
+  };
 
   const [isExpanded, setIsExpanded] = useState(false);
   const [isRewriting, setIsRewriting] = useState(false);
@@ -153,9 +179,52 @@ export const SectionSortableItem: React.FC<SectionSortableItemProps> = ({
               alignItems: 'center',
             }}
             title="Drag to reorder section"
+            aria-label={`Drag to reorder ${label}`}
           >
             <GripVertical size={16} />
           </button>
+
+          {/* Keyboard accessible Reorder Controls */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+            <button
+              type="button"
+              onClick={handleMoveUp}
+              disabled={!canMoveUp}
+              aria-label={`Move ${label} up`}
+              title={`Move ${label} up`}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: canMoveUp ? 'rgba(255, 255, 255, 0.7)' : 'rgba(255, 255, 255, 0.15)',
+                cursor: canMoveUp ? 'pointer' : 'not-allowed',
+                padding: '1px',
+                display: 'flex',
+                alignItems: 'center',
+                lineHeight: 1,
+              }}
+            >
+              <ChevronUp size={12} />
+            </button>
+            <button
+              type="button"
+              onClick={handleMoveDown}
+              disabled={!canMoveDown}
+              aria-label={`Move ${label} down`}
+              title={`Move ${label} down`}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: canMoveDown ? 'rgba(255, 255, 255, 0.7)' : 'rgba(255, 255, 255, 0.15)',
+                cursor: canMoveDown ? 'pointer' : 'not-allowed',
+                padding: '1px',
+                display: 'flex',
+                alignItems: 'center',
+                lineHeight: 1,
+              }}
+            >
+              <ChevronDown size={12} />
+            </button>
+          </div>
 
           <span
             style={{

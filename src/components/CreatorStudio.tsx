@@ -921,6 +921,8 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
         {/* STEPPER BAR: 1. Details -> 2. Generate -> 3. Customize -> 4. Download/Publish */}
         <div
           className="stepper-container"
+          role="tablist"
+          aria-label="Portfolio creation process steps"
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -951,6 +953,9 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
             return (
               <React.Fragment key={step.id}>
                 <button
+                  role="tab"
+                  aria-selected={isCurrent}
+                  aria-label={`Step ${step.stepNumber}: ${step.label} (${step.desc})`}
                   onClick={() => setCurrentStep(step.id)}
                   style={{
                     background: 'transparent',
@@ -1047,6 +1052,8 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
 
               {/* Sub-Tabs for Details */}
               <div
+                role="tablist"
+                aria-label="Creator details categories"
                 style={{
                   display: 'flex',
                   gap: '8px',
@@ -1067,6 +1074,9 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
                   return (
                     <button
                       key={st.id}
+                      role="tab"
+                      aria-selected={active}
+                      aria-label={st.label}
                       onClick={() => setDetailsSubTab(st.id)}
                       style={{
                         padding: '8px 14px',

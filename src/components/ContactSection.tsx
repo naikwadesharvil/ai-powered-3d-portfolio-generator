@@ -379,6 +379,7 @@ export const ContactSection: React.FC<ContactSectionProps> = ({ portfolio }) => 
               <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                 <div>
                   <label
+                    htmlFor="contact-name"
                     style={{
                       display: 'block',
                       fontFamily: 'var(--font-mono)',
@@ -391,6 +392,7 @@ export const ContactSection: React.FC<ContactSectionProps> = ({ portfolio }) => 
                     SENDER NAME // IDENTITY
                   </label>
                   <input
+                    id="contact-name"
                     type="text"
                     required
                     placeholder="e.g. Sarah Jenkins (Recruiter / Lead Engineer)"
@@ -419,6 +421,7 @@ export const ContactSection: React.FC<ContactSectionProps> = ({ portfolio }) => 
 
                 <div>
                   <label
+                    htmlFor="contact-email"
                     style={{
                       display: 'block',
                       fontFamily: 'var(--font-mono)',
@@ -431,6 +434,7 @@ export const ContactSection: React.FC<ContactSectionProps> = ({ portfolio }) => 
                     ELECTRONIC MAIL // COORDINATE
                   </label>
                   <input
+                    id="contact-email"
                     type="email"
                     required
                     placeholder="sarah@organization.com"
@@ -459,6 +463,7 @@ export const ContactSection: React.FC<ContactSectionProps> = ({ portfolio }) => 
 
                 <div>
                   <label
+                    htmlFor="contact-message"
                     style={{
                       display: 'block',
                       fontFamily: 'var(--font-mono)',
@@ -471,6 +476,7 @@ export const ContactSection: React.FC<ContactSectionProps> = ({ portfolio }) => 
                     TRANSMISSION MESSAGE // DETAILS
                   </label>
                   <textarea
+                    id="contact-message"
                     required
                     rows={4}
                     placeholder="Provide inquiry details, job specifications, or project scope..."
@@ -500,16 +506,19 @@ export const ContactSection: React.FC<ContactSectionProps> = ({ portfolio }) => 
 
                 <button
                   type="submit"
+                  disabled={submitted}
                   className="btn-primary"
                   style={{
                     width: '100%',
                     justifyContent: 'center',
                     padding: '14px',
                     marginTop: '8px',
+                    opacity: submitted ? 0.6 : 1,
+                    cursor: submitted ? 'not-allowed' : 'pointer',
                   }}
                 >
                   <Send size={16} />
-                  <span>TRANSMIT MESSAGE</span>
+                  <span>{submitted ? 'TRANSMITTING...' : 'TRANSMIT MESSAGE'}</span>
                 </button>
               </form>
             )}

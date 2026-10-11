@@ -22,13 +22,16 @@ export const ProjectBlueprintPreview: React.FC<ProjectBlueprintPreviewProps> = (
   branch = 'cs_it',
   height = 160,
 }) => {
-  // If custom project image is explicitly provided by user, render with aspect-ratio cover
-  if (project.imageUrl) {
+  const [imgError, setImgError] = React.useState(false);
+
+  // If custom project image is explicitly provided by user, render with aspect-ratio cover and onError fallback
+  if (project.imageUrl && !imgError) {
     return (
       <div
         style={{
           width: '100%',
           height: `${height}px`,
+          aspectRatio: '16 / 9',
           borderRadius: '12px',
           overflow: 'hidden',
           position: 'relative',
@@ -38,7 +41,9 @@ export const ProjectBlueprintPreview: React.FC<ProjectBlueprintPreviewProps> = (
       >
         <img
           src={project.imageUrl}
-          alt={project.title}
+          alt={`${project.title} project illustration preview`}
+          loading="lazy"
+          onError={() => setImgError(true)}
           style={{ width: '100%', height: '100%', objectFit: 'cover' }}
         />
         <div

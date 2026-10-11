@@ -56,13 +56,42 @@ ${portfolio.certifications.map((c) => `- ${c.name} (${c.issuer})`).join('\n')}
     URL.revokeObjectURL(url);
   };
 
+  const [activeSection, setActiveSection] = useState<string>('hero');
+
+  // Track active section for navigation highlighting
   useEffect(() => {
-    const handleScroll = () => {
+    const sectionIds = ['hero', 'about', 'services', 'experience', 'projects', 'contact'];
+    const handleScrollSpy = () => {
       setScrolled(window.scrollY > 40);
+      const scrollPos = window.scrollY + 120;
+      for (const id of sectionIds) {
+        const el = document.getElementById(id);
+        if (el) {
+          const top = el.offsetTop;
+          const height = el.offsetHeight;
+          if (scrollPos >= top && scrollPos < top + height) {
+            setActiveSection(id);
+            break;
+          }
+        }
+      }
     };
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
+    window.addEventListener('scroll', handleScrollSpy, { passive: true });
+    handleScrollSpy();
+    return () => window.removeEventListener('scroll', handleScrollSpy);
   }, []);
+
+  // Keyboard navigation & Escape key support for mobile drawer
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setMobileMenuOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [mobileMenuOpen]);
 
   // Subtle futuristic ambient drone synthesizer using Web Audio API
   const toggleAudio = () => {
@@ -185,30 +214,37 @@ ${portfolio.certifications.map((c) => `- ${c.name} (${c.issuer})`).join('\n')}
         </a>
 
         {/* Center Navigation Links */}
-        <nav className="desktop-nav">
-          {navLinks.map((link) => (
-            <a
-              key={link.label}
-              href={link.href}
-              style={{
-                fontFamily: 'var(--font-mono)',
-                fontSize: '0.75rem',
-                letterSpacing: '0.12em',
-                color: 'var(--text-secondary)',
-                textDecoration: 'none',
-                transition: 'all 0.2s ease',
-                position: 'relative',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.color = 'var(--accent-cyan)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.color = 'var(--text-secondary)';
-              }}
-            >
-              {link.label}
-            </a>
-          ))}
+        <nav className="desktop-nav" aria-label="Main Navigation">
+          {navLinks.map((link) => {
+            const isActive = link.href.replace('#', '') === activeSection;
+            return (
+              <a
+                key={link.label}
+                href={link.href}
+                aria-current={isActive ? 'page' : undefined}
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '0.75rem',
+                  letterSpacing: '0.12em',
+                  color: isActive ? 'var(--accent-cyan)' : 'var(--text-secondary)',
+                  fontWeight: isActive ? 700 : 500,
+                  textDecoration: 'none',
+                  transition: 'all 0.2s ease',
+                  position: 'relative',
+                  padding: '4px 0',
+                  borderBottom: isActive ? '2px solid var(--accent-cyan)' : '2px solid transparent',
+                }}
+                onMouseEnter={(e) => {
+                  if (!isActive) e.currentTarget.style.color = 'var(--accent-cyan)';
+                }}
+                onMouseLeave={(e) => {
+                  if (!isActive) e.currentTarget.style.color = 'var(--text-secondary)';
+                }}
+              >
+                {link.label}
+              </a>
+            );
+          })}
         </nav>
 
         {/* Right Action Utilities */}
@@ -324,6 +360,8 @@ ${portfolio.certifications.map((c) => `- ${c.name} (${c.issuer})`).join('\n')}
             onClick={() => setMobileMenuOpen(true)}
             className="mobile-menu-toggle"
             aria-label="Open navigation menu"
+            aria-expanded={mobileMenuOpen}
+            aria-controls="mobile-nav-drawer"
             style={{
               background: 'rgba(255, 255, 255, 0.05)',
               border: '1px solid rgba(255, 255, 255, 0.12)',
@@ -346,6 +384,10 @@ ${portfolio.certifications.map((c) => `- ${c.name} (${c.issuer})`).join('\n')}
       {/* Mobile Navigation Drawer Overlay */}
       {mobileMenuOpen && (
         <div
+          id="mobile-nav-drawer"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Mobile navigation"
           style={{
             position: 'fixed',
             top: 0,

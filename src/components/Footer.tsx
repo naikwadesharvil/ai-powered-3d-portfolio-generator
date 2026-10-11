@@ -86,10 +86,16 @@ export const Footer: React.FC<FooterProps> = ({ portfolio }) => {
               DIRECTORY // NAVIGATION
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {['HOME', 'ABOUT', 'PROJECTS', 'EXPERIENCE', 'CONTACT'].map((item) => (
+              {[
+                { label: 'HOME', href: '#hero' },
+                { label: 'ABOUT', href: '#about' },
+                { label: 'PROJECTS', href: '#projects' },
+                { label: 'EXPERIENCE', href: '#experience' },
+                { label: 'CONTACT', href: '#contact' },
+              ].map((item) => (
                 <a
-                  key={item}
-                  href={`#${item.toLowerCase()}`}
+                  key={item.label}
+                  href={item.href}
                   style={{
                     fontFamily: 'var(--font-mono)',
                     fontSize: '0.82rem',
@@ -104,7 +110,7 @@ export const Footer: React.FC<FooterProps> = ({ portfolio }) => {
                     e.currentTarget.style.color = 'var(--text-secondary)';
                   }}
                 >
-                  &gt; {item}
+                  &gt; {item.label}
                 </a>
               ))}
             </div>
@@ -128,6 +134,7 @@ export const Footer: React.FC<FooterProps> = ({ portfolio }) => {
                 href={portfolio.github || 'https://github.com'}
                 target="_blank"
                 rel="noopener noreferrer"
+                aria-label={`GitHub profile of ${portfolio.name}`}
                 style={{
                   fontFamily: 'var(--font-mono)',
                   fontSize: '0.82rem',
@@ -145,6 +152,7 @@ export const Footer: React.FC<FooterProps> = ({ portfolio }) => {
                 href={portfolio.linkedin || 'https://linkedin.com'}
                 target="_blank"
                 rel="noopener noreferrer"
+                aria-label={`LinkedIn profile of ${portfolio.name}`}
                 style={{
                   fontFamily: 'var(--font-mono)',
                   fontSize: '0.82rem',
@@ -162,6 +170,7 @@ export const Footer: React.FC<FooterProps> = ({ portfolio }) => {
                 href={portfolio.twitter || 'https://x.com'}
                 target="_blank"
                 rel="noopener noreferrer"
+                aria-label={`Twitter/X profile of ${portfolio.name}`}
                 style={{
                   fontFamily: 'var(--font-mono)',
                   fontSize: '0.82rem',
@@ -205,6 +214,7 @@ export const Footer: React.FC<FooterProps> = ({ portfolio }) => {
               <input
                 type="email"
                 placeholder="YOUR_EMAIL@DOMAIN.COM"
+                aria-label="Email address for broadcast newsletter"
                 style={{
                   flex: 1,
                   padding: '10px 14px',
@@ -221,6 +231,7 @@ export const Footer: React.FC<FooterProps> = ({ portfolio }) => {
                 className="btn-primary"
                 style={{ padding: '10px 14px', borderRadius: '6px' }}
                 title="Send"
+                aria-label="Subscribe to broadcast updates"
               >
                 <ArrowRight size={16} />
               </button>

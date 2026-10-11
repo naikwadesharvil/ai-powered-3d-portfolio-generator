@@ -168,12 +168,48 @@ export const FrameScrubber: React.FC<FrameScrubberProps> = ({
     };
   }, [mode]);
 
-  // 4. Smooth 60 FPS Render Loop & Canvas Draw
+  // 4. Smooth Render Loop with Off-Screen and Background Tab Pausing
   useEffect(() => {
     let lastFpsTime = performance.now();
     let frameCounter = 0;
+    let isObserverVisible = true;
+    let isTabVisible = typeof document !== 'undefined' ? !document.hidden : true;
+    let isRunning = true;
+
+    // IntersectionObserver to pause loop when scrolled out of view
+    const container = containerRef.current;
+    let observer: IntersectionObserver | null = null;
+    if (typeof IntersectionObserver !== 'undefined' && container) {
+      observer = new IntersectionObserver(
+        (entries) => {
+          const entry = entries[0];
+          isObserverVisible = entry ? entry.isIntersecting : true;
+          if (isObserverVisible && isTabVisible && !animFrameIdRef.current) {
+            animFrameIdRef.current = requestAnimationFrame(render);
+          }
+        },
+        { threshold: 0.05 }
+      );
+      observer.observe(container);
+    }
+
+    const handleVisibilityChange = () => {
+      isTabVisible = !document.hidden;
+      if (isObserverVisible && isTabVisible && !animFrameIdRef.current) {
+        animFrameIdRef.current = requestAnimationFrame(render);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     const render = (now: number) => {
+      if (!isRunning) return;
+
+      // Stop loop while off-screen or tab is hidden to conserve GPU/CPU
+      if (!isObserverVisible || !isTabVisible) {
+        animFrameIdRef.current = null;
+        return;
+      }
+
       frameCounter++;
       if (now - lastFpsTime >= 1000) {
         setFps(Math.min(60, Math.round((frameCounter * 1000) / (now - lastFpsTime))));
@@ -208,12 +244,14 @@ export const FrameScrubber: React.FC<FrameScrubberProps> = ({
 
       // Render to 2D Canvas
       const canvas = canvasRef.current;
-      const container = containerRef.current;
-      if (canvas && container) {
+      const curContainer = containerRef.current;
+      if (canvas && curContainer) {
         const ctx = canvas.getContext('2d');
         if (ctx) {
-          const rect = container.getBoundingClientRect();
-          const dpr = Math.min(window.devicePixelRatio || 1, 2);
+          const rect = curContainer.getBoundingClientRect();
+          // Lower pixel ratio on mobile (<=1.25) to save GPU fill rate & battery
+          const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+          const dpr = Math.min(window.devicePixelRatio || 1, isMobile ? 1.25 : 2);
 
           const displayWidth = Math.round(rect.width);
           const displayHeight = Math.round(rect.height);
@@ -314,6 +352,9 @@ export const FrameScrubber: React.FC<FrameScrubberProps> = ({
     animFrameIdRef.current = requestAnimationFrame(render);
 
     return () => {
+      isRunning = false;
+      if (observer) observer.disconnect();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       if (animFrameIdRef.current) {
         cancelAnimationFrame(animFrameIdRef.current);
       }
@@ -335,16 +376,25 @@ export const FrameScrubber: React.FC<FrameScrubberProps> = ({
         ...style,
       }}
     >
-      {/* 2D Canvas */}
+      {/* 2D Canvas with fallback image for non-canvas/WebGL environments */}
       <canvas
         ref={canvasRef}
+        role="img"
+        aria-label={telemetryLabel || 'Interactive 3D frame sequence canvas'}
         style={{
           display: 'block',
           width: '100%',
           height: '100%',
           objectFit: 'contain',
         }}
-      />
+      >
+        <img
+          src={fallbackImage}
+          alt={telemetryLabel || '3D portrait preview'}
+          loading="lazy"
+          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+        />
+      </canvas>
 
       {/* Monospace Telemetry HUD Overlay */}
       {overlayTelemetry && (

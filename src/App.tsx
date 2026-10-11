@@ -14,6 +14,7 @@ import { ContactSection } from './components/ContactSection';
 import { Footer } from './components/Footer';
 import { CreatorStudio } from './components/CreatorStudio';
 import { ResumeModal } from './components/ResumeModal';
+import { NotFoundPage } from './components/NotFoundPage';
 import { usePortfolioStore } from './store/portfolioStore';
 import { themeTokensToCssVars } from './types/themeTokens';
 
@@ -25,6 +26,22 @@ export function App() {
   const [isStudioOpen, setIsStudioOpen] = useState(false);
   const [isResumeOpen, setIsResumeOpen] = useState(false);
   const [previewMode, setPreviewMode] = useState<'desktop' | 'tablet' | 'mobile'>('desktop');
+  const [currentPath, setCurrentPath] = useState(
+    typeof window !== 'undefined' ? window.location.pathname : '/'
+  );
+
+  useEffect(() => {
+    const handlePopState = () => {
+      setCurrentPath(window.location.pathname);
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  const is404 =
+    currentPath !== '/' &&
+    currentPath !== '/index.html' &&
+    !currentPath.startsWith('/?');
 
   // Synchronize CSS custom property variables with active theme tokens
   useEffect(() => {
@@ -87,6 +104,17 @@ export function App() {
       transition: 'all 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
     };
   };
+
+  if (is404) {
+    return (
+      <NotFoundPage
+        onGoHome={() => {
+          window.history.pushState({}, '', '/');
+          setCurrentPath('/');
+        }}
+      />
+    );
+  }
 
   return (
     <div
