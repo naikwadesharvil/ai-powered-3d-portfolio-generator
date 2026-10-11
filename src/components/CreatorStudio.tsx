@@ -3,7 +3,6 @@ import {
   X,
   Sparkles,
   Download,
-  Share2,
   Check,
   RotateCcw,
   RotateCw,
@@ -24,10 +23,13 @@ import {
   Award,
   FileText,
   Copy,
+  Globe,
+  ExternalLink,
+  Loader2,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import JSZip from 'jszip';
-import { saveAs } from 'file-saver';
+import { publishPortfolio, unpublishPortfolio } from '../services/portfolioApi';
+import { downloadStaticHtmlZip } from '../services/staticExport';
 import type {
   PortfolioData,
   UserRole,
@@ -193,9 +195,67 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
-  // Public Link & ZIP State
-  const [copiedLink, setCopiedLink] = useState(false);
+  // Public ZIP State
   const [exportingZip, setExportingZip] = useState(false);
+
+  // Live Cloud Publishing State (Phase 6)
+  const [publishStatus, setPublishStatus] = useState<'idle' | 'publishing' | 'published' | 'error'>('idle');
+  const [publishedSlug, setPublishedSlug] = useState<string | null>(null);
+  const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
+  const [publishError, setPublishError] = useState<string | null>(null);
+  const [isUnpublishing, setIsUnpublishing] = useState(false);
+  const [copiedPublishLink, setCopiedPublishLink] = useState(false);
+
+  const handlePublish = async () => {
+    setPublishStatus('publishing');
+    setPublishError(null);
+    try {
+      const res = await publishPortfolio(currentPortfolio);
+      if (res.success && res.slug) {
+        setPublishStatus('published');
+        setPublishedSlug(res.slug);
+        const fullUrl = `${window.location.origin}/p/${res.slug}`;
+        setPublishedUrl(fullUrl);
+        confetti({
+          particleCount: 70,
+          spread: 60,
+          origin: { y: 0.6 },
+        });
+      } else {
+        setPublishStatus('error');
+        setPublishError(res.message || res.error || 'Failed to publish portfolio.');
+      }
+    } catch (err: any) {
+      setPublishStatus('error');
+      setPublishError(err?.message || 'Error communicating with publishing service.');
+    }
+  };
+
+  const handleUnpublish = async () => {
+    if (!publishedSlug) return;
+    if (!window.confirm('Are you sure you want to unpublish your live portfolio? The public link will become inactive.')) return;
+    setIsUnpublishing(true);
+    try {
+      const res = await unpublishPortfolio(publishedSlug);
+      if (res.success) {
+        setPublishStatus('idle');
+        setPublishedSlug(null);
+        setPublishedUrl(null);
+      } else {
+        alert(res.error || 'Failed to unpublish');
+      }
+    } finally {
+      setIsUnpublishing(false);
+    }
+  };
+
+  const handleCopyPublishedLink = () => {
+    if (publishedUrl) {
+      navigator.clipboard.writeText(publishedUrl);
+      setCopiedPublishLink(true);
+      setTimeout(() => setCopiedPublishLink(false), 2500);
+    }
+  };
 
   // Check backend server health on open
   useEffect(() => {
@@ -506,140 +566,11 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
     onUpdatePortfolio(next);
   };
 
-  // Copy Public URL
-  const handleCopyShareableLink = () => {
-    const url = window.location.href;
-    navigator.clipboard.writeText(url);
-    setCopiedLink(true);
-    setTimeout(() => setCopiedLink(false), 3000);
-  };
-
-  // Standalone Complete Website ZIP Exporter
+  // Standalone Complete Website ZIP Exporter (Offline Static HTML Package)
   const handleExportZip = async () => {
     setExportingZip(true);
     try {
-      const zip = new JSZip();
-
-      const standaloneHtml = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>${portfolio.name} — ${portfolio.tagline}</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@500;700&family=Syne:wght@700;800&display=swap" rel="stylesheet">
-  <style>
-    :root {
-      --bg-primary: #030508;
-      --bg-secondary: #080d17;
-      --accent-cyan: #00f2fe;
-      --accent-magenta: #ff0055;
-      --text-primary: #ffffff;
-      --text-secondary: rgba(255, 255, 255, 0.65);
-      --font-display: 'Syne', sans-serif;
-      --font-heading: 'Space Grotesk', sans-serif;
-      --font-body: 'Inter', sans-serif;
-      --font-mono: 'JetBrains Mono', monospace;
-    }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      background-color: var(--bg-primary);
-      color: var(--text-primary);
-      font-family: var(--font-body);
-      overflow-x: hidden;
-      line-height: 1.6;
-    }
-    .glass-panel {
-      background: rgba(10, 15, 26, 0.7);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      border: 1px solid rgba(0, 242, 254, 0.2);
-      border-radius: 12px;
-    }
-    .glow-cyan {
-      text-shadow: 0 0 20px rgba(0, 242, 254, 0.6);
-    }
-  </style>
-</head>
-<body>
-  <header style="position: fixed; top: 0; left: 0; right: 0; height: 75px; z-index: 50; display: flex; align-items: center; justify-content: space-between; padding: 0 32px; background: rgba(3, 5, 8, 0.85); backdrop-filter: blur(16px); border-bottom: 1px solid rgba(255,255,255,0.08);">
-    <div style="font-family: var(--font-heading); font-weight: 700; letter-spacing: 0.1em; color: #fff;">
-      ${portfolio.name.toUpperCase()} <span style="color: var(--accent-cyan); font-size: 0.8rem;">// ${portfolio.branchName ? portfolio.branchName.toUpperCase() : portfolio.role.toUpperCase()}</span>
-    </div>
-    <nav style="display: flex; gap: 24px; font-family: var(--font-mono); font-size: 0.8rem;">
-      <a href="#about" style="color: rgba(255,255,255,0.7); text-decoration: none;">ABOUT</a>
-      <a href="#projects" style="color: rgba(255,255,255,0.7); text-decoration: none;">PROJECTS</a>
-      <a href="#contact" style="color: rgba(255,255,255,0.7); text-decoration: none;">CONTACT</a>
-    </nav>
-  </header>
-
-  <section style="min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 120px 24px 60px;">
-    <div style="font-family: var(--font-mono); font-size: 0.8rem; color: var(--accent-cyan); margin-bottom: 16px; letter-spacing: 0.2em;">
-      ${portfolio.telemetry?.status || 'STATUS: ACTIVE // 2026'}
-    </div>
-    <h1 style="font-family: var(--font-display); font-size: clamp(3rem, 8vw, 6.5rem); font-weight: 800; line-height: 1; margin-bottom: 16px;" class="glow-cyan">
-      ${portfolio.name}
-    </h1>
-    <p style="font-family: var(--font-heading); font-size: clamp(1.2rem, 3vw, 2rem); color: rgba(255,255,255,0.85); max-width: 800px; margin-bottom: 32px;">
-      ${portfolio.tagline}
-    </p>
-    <div style="display: flex; gap: 16px;">
-      <a href="#projects" style="background: var(--accent-cyan); color: #000; padding: 14px 28px; border-radius: 8px; font-weight: 700; text-decoration: none;">VIEW PROJECTS</a>
-      <a href="#contact" style="border: 1px solid rgba(255,255,255,0.2); color: #fff; padding: 14px 28px; border-radius: 8px; font-weight: 700; text-decoration: none;">GET IN TOUCH</a>
-    </div>
-  </section>
-
-  <section id="about" style="padding: 100px 32px; max-width: 1200px; margin: 0 auto;">
-    <h2 style="font-family: var(--font-display); font-size: 2.8rem; margin-bottom: 40px;">ABOUT ME.</h2>
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 24px;">
-      <div class="glass-panel" style="padding: 32px;">
-        <h3 style="color: var(--accent-cyan); margin-bottom: 12px; font-family: var(--font-mono); font-size: 0.85rem;">BIOGRAPHY</h3>
-        <p style="color: rgba(255,255,255,0.85); font-size: 1.05rem; line-height: 1.7;">${portfolio.fullBio}</p>
-      </div>
-      <div class="glass-panel" style="padding: 32px;">
-        <h3 style="color: var(--accent-cyan); margin-bottom: 16px; font-family: var(--font-mono); font-size: 0.85rem;">CORE TOOLS & SKILLS</h3>
-        <div style="display: flex; flex-wrap: wrap; gap: 8px;">
-          ${portfolio.skills.map(s => `<span style="background: rgba(0,242,254,0.1); border: 1px solid rgba(0,242,254,0.3); padding: 6px 12px; border-radius: 6px; font-size: 0.8rem; font-family: var(--font-mono);">${s.name}</span>`).join('')}
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <section id="projects" style="padding: 100px 32px; max-width: 1200px; margin: 0 auto;">
-    <h2 style="font-family: var(--font-display); font-size: 2.8rem; margin-bottom: 40px;">SELECTED WORKS.</h2>
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 24px;">
-      ${portfolio.projects.map(p => `
-        <div class="glass-panel" style="padding: 28px; border-top: 3px solid ${p.isAiIdea ? 'var(--accent-magenta)' : 'var(--accent-cyan)'};">
-          <div style="display: flex; justify-content: space-between; margin-bottom: 12px;">
-            <span style="font-size: 0.75rem; color: ${p.isAiIdea ? 'var(--accent-magenta)' : 'var(--accent-cyan)'}; font-family: var(--font-mono);">${p.isAiIdea ? '💡 AI SUGGESTION' : '✓ VERIFIED PROJECT'}</span>
-            ${p.metrics ? `<span style="font-size: 0.75rem; color: rgba(255,255,255,0.6);">${p.metrics}</span>` : ''}
-          </div>
-          <h3 style="font-family: var(--font-heading); font-size: 1.3rem; margin-bottom: 12px;">${p.title}</h3>
-          <p style="color: rgba(255,255,255,0.75); font-size: 0.9rem; margin-bottom: 16px; line-height: 1.6;">${p.description}</p>
-          <div style="display: flex; flex-wrap: wrap; gap: 6px;">
-            ${(p.tools || p.tags || []).map(t => `<span style="background: rgba(255,255,255,0.06); padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-family: var(--font-mono);">${t}</span>`).join('')}
-          </div>
-        </div>
-      `).join('')}
-    </div>
-  </section>
-
-  <footer id="contact" style="padding: 80px 32px; text-align: center; border-top: 1px solid rgba(255,255,255,0.08); background: #020305;">
-    <h3 style="font-family: var(--font-display); font-size: 2rem; margin-bottom: 12px;">INITIATE INQUIRY</h3>
-    <p style="color: rgba(255,255,255,0.7); margin-bottom: 24px;">${portfolio.email} ${portfolio.location ? `• ${portfolio.location}` : ''}</p>
-    <p style="color: rgba(255,255,255,0.4); font-size: 0.8rem; font-family: var(--font-mono);">
-      Generated via AI-Powered 3D Portfolio Platform // ${portfolio.telemetry?.fps || '60 FPS STABLE'}
-    </p>
-  </footer>
-</body>
-</html>`;
-
-      zip.file('index.html', standaloneHtml);
-      zip.file('portfolio.json', JSON.stringify(portfolio, null, 2));
-
-      const blob = await zip.generateAsync({ type: 'blob' });
-      saveAs(blob, `${portfolio.name.toLowerCase().replace(/\s+/g, '_')}_3D_portfolio.zip`);
+      await downloadStaticHtmlZip(currentPortfolio);
     } catch (err: any) {
       alert(`Export failed: ${err?.message || 'Error creating ZIP file'}`);
     } finally {
@@ -2413,7 +2344,7 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
               </p>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px', marginBottom: '24px' }}>
-                {/* 1. Standalone ZIP Package */}
+                {/* 1. Standalone Offline HTML ZIP Package */}
                 <div
                   style={{
                     padding: '20px',
@@ -2430,19 +2361,19 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--accent-cyan)', marginBottom: '6px' }}>
                       <Download size={18} />
-                      <span style={{ fontWeight: 700, fontSize: '0.95rem' }}>Standalone Website ZIP</span>
+                      <span style={{ fontWeight: 700, fontSize: '0.95rem' }}>Download as static HTML (zip)</span>
                     </div>
                     <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
-                      Complete offline HTML + CSS bundle with 3D canvas and portfolio.json. Deploy anywhere with zero build steps.
+                      Self-contained offline HTML website with inlined CSS, styling tokens, and sanitized data. Double-click to open offline anywhere.
                     </p>
                   </div>
                   <button
                     onClick={handleExportZip}
                     disabled={exportingZip}
                     className="btn-primary"
-                    style={{ padding: '12px', justifyContent: 'center', fontSize: '0.88rem' }}
+                    style={{ padding: '12px', justifyContent: 'center', fontSize: '0.84rem' }}
                   >
-                    <span>{exportingZip ? 'PACKAGING...' : 'DOWNLOAD ZIP'}</span>
+                    <span>{exportingZip ? 'PACKAGING OFFLINE HTML...' : 'DOWNLOAD AS STATIC HTML (ZIP)'}</span>
                   </button>
                 </div>
 
@@ -2624,81 +2555,207 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
                 </div>
               </div>
 
-              {/* Public Share Link Card (Coming in Phase 6: Publishing & Hosting) */}
+              {/* Public Share & Publish Card (Phase 6: Live Edge Hosting & Slug) */}
               <div
                 style={{
-                  padding: '18px 20px',
-                  borderRadius: '10px',
-                  background: 'rgba(255, 255, 255, 0.02)',
-                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  padding: '20px',
+                  borderRadius: '12px',
+                  background: 'rgba(255, 255, 255, 0.03)',
+                  border: '1px solid rgba(0, 242, 254, 0.3)',
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: '12px',
+                  gap: '14px',
                   marginBottom: '28px',
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Share2 size={16} color="var(--accent-cyan)" />
-                    <span style={{ fontWeight: 700, fontSize: '0.9rem', color: '#fff' }}>
-                      Public Shareable URL
+                    <Globe size={18} color="var(--accent-cyan)" />
+                    <span style={{ fontWeight: 700, fontSize: '0.95rem', color: '#fff' }}>
+                      Publish Live 3D Portfolio
                     </span>
                   </div>
                   <span
                     style={{
                       fontFamily: 'var(--font-mono)',
                       fontSize: '0.68rem',
-                      color: 'var(--accent-cyan)',
-                      background: 'rgba(0, 242, 254, 0.1)',
-                      border: '1px solid rgba(0, 242, 254, 0.3)',
+                      color: publishStatus === 'published' ? '#10b981' : 'var(--accent-cyan)',
+                      background: publishStatus === 'published' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(0, 242, 254, 0.1)',
+                      border: `1px solid ${publishStatus === 'published' ? 'rgba(16, 185, 129, 0.4)' : 'rgba(0, 242, 254, 0.3)'}`,
                       padding: '2px 8px',
                       borderRadius: '999px',
                       textTransform: 'uppercase',
+                      fontWeight: 700,
                     }}
                   >
-                    Publishing is coming soon
+                    {publishStatus === 'published' ? 'LIVE & ACTIVE' : publishStatus === 'publishing' ? 'DEPLOYING...' : 'CLOUD HOSTING'}
                   </span>
                 </div>
+
                 <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: 1.4, margin: 0 }}>
-                  Live cloud hosting, vanity domains, and public URLs are scheduled for an upcoming release. No fake links are generated. To deploy your portfolio today, download the <strong>Standalone Website ZIP</strong> above.
+                  Deploy your portfolio to a persistent, unguessable public URL (<code style={{ color: 'var(--accent-cyan)' }}>/p/:slug</code>) that anyone can visit with zero studio UI.
                 </p>
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: '12px',
-                    padding: '8px 12px',
-                    borderRadius: '6px',
-                    background: 'rgba(0,0,0,0.3)',
-                    border: '1px dashed rgba(255,255,255,0.15)',
-                  }}
-                >
-                  <span style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.7)', fontFamily: 'var(--font-mono)' }}>
-                    {typeof window !== 'undefined' ? window.location.href : 'http://localhost:5173/'}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={handleCopyShareableLink}
+
+                {/* Error Banner with Retry */}
+                {publishStatus === 'error' && (
+                  <div
                     style={{
-                      background: copiedLink ? 'rgba(0, 242, 254, 0.2)' : 'rgba(255, 255, 255, 0.08)',
-                      border: '1px solid rgba(255, 255, 255, 0.2)',
-                      color: copiedLink ? 'var(--accent-cyan)' : '#ffffff',
-                      padding: '6px 12px',
-                      borderRadius: '6px',
-                      cursor: 'pointer',
+                      padding: '10px 14px',
+                      borderRadius: '8px',
+                      background: 'rgba(239, 68, 68, 0.15)',
+                      border: '1px solid rgba(239, 68, 68, 0.4)',
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '6px',
-                      fontSize: '0.74rem',
-                      fontFamily: 'var(--font-mono)',
-                      flexShrink: 0,
+                      justifyContent: 'space-between',
+                      gap: '10px',
                     }}
                   >
-                    {copiedLink ? <Check size={14} /> : <Copy size={14} />}
-                    <span>{copiedLink ? 'LOCAL LINK COPIED!' : 'COPY LOCAL PREVIEW LINK'}</span>
-                  </button>
-                </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#fca5a5', fontSize: '0.8rem' }}>
+                      <AlertCircle size={16} />
+                      <span>{publishError || 'Publishing failed. Please retry.'}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handlePublish}
+                      style={{
+                        background: 'rgba(239, 68, 68, 0.3)',
+                        border: '1px solid #ef4444',
+                        color: '#fff',
+                        padding: '4px 10px',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        fontSize: '0.74rem',
+                        fontWeight: 600,
+                      }}
+                    >
+                      Retry
+                    </button>
+                  </div>
+                )}
+
+                {/* Published State: Real Link, Copy, Open, and Unpublish */}
+                {publishStatus === 'published' && publishedUrl ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: '10px',
+                        padding: '10px 14px',
+                        borderRadius: '8px',
+                        background: 'rgba(0,0,0,0.5)',
+                        border: '1px solid rgba(16, 185, 129, 0.4)',
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: '0.82rem',
+                          color: '#34d399',
+                          fontFamily: 'var(--font-mono)',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {publishedUrl}
+                      </span>
+                      <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
+                        <button
+                          type="button"
+                          onClick={handleCopyPublishedLink}
+                          className="btn-primary"
+                          style={{
+                            padding: '6px 12px',
+                            fontSize: '0.74rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                          }}
+                        >
+                          {copiedPublishLink ? <Check size={14} /> : <Copy size={14} />}
+                          <span>{copiedPublishLink ? 'COPIED!' : 'COPY LINK'}</span>
+                        </button>
+                        <a
+                          href={publishedUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            background: 'rgba(255, 255, 255, 0.08)',
+                            border: '1px solid rgba(255, 255, 255, 0.2)',
+                            color: '#ffffff',
+                            padding: '6px 12px',
+                            borderRadius: '6px',
+                            textDecoration: 'none',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            fontSize: '0.74rem',
+                            fontFamily: 'var(--font-mono)',
+                          }}
+                        >
+                          <ExternalLink size={14} />
+                          <span>OPEN SITE</span>
+                        </a>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '4px' }}>
+                      <button
+                        type="button"
+                        onClick={handleUnpublish}
+                        disabled={isUnpublishing}
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          color: '#ef4444',
+                          fontSize: '0.74rem',
+                          fontFamily: 'var(--font-mono)',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          padding: '4px 8px',
+                          opacity: isUnpublishing ? 0.6 : 0.9,
+                        }}
+                      >
+                        <Trash2 size={13} />
+                        <span>{isUnpublishing ? 'UNPUBLISHING...' : 'Unpublish Portfolio'}</span>
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  /* Initial or Loading State */
+                  <div>
+                    <button
+                      type="button"
+                      onClick={handlePublish}
+                      disabled={publishStatus === 'publishing'}
+                      className="btn-primary"
+                      style={{
+                        padding: '12px 24px',
+                        fontSize: '0.88rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '8px',
+                        width: '100%',
+                      }}
+                    >
+                      {publishStatus === 'publishing' ? (
+                        <>
+                          <Loader2 size={16} className="animate-spin" />
+                          <span>DEPLOYING TO CLOUD...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Globe size={16} />
+                          <span>PUBLISH LIVE 3D PORTFOLIO</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Back to Customize and Close Action */}

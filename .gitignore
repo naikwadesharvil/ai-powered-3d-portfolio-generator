@@ -39,3 +39,7 @@ qa_artifacts/
 test_output_*.png
 test_output_*.pdf
 test_output_*.docx
+
+# Runtime portfolio JSON storage
+server/data/**/*.json
+!server/data/**/.gitkeep

@@ -2,6 +2,7 @@ import React from 'react';
 import { ArrowUp, ArrowRight } from 'lucide-react';
 import { GithubIcon, LinkedinIcon, TwitterIcon } from './Icons';
 import type { PortfolioData } from '../types/portfolio';
+import { sanitizeUrl } from '../utils/sanitize';
 
 interface FooterProps {
   portfolio: PortfolioData;
@@ -131,7 +132,7 @@ export const Footer: React.FC<FooterProps> = ({ portfolio }) => {
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <a
-                href={portfolio.github || 'https://github.com'}
+                href={sanitizeUrl(portfolio.github || 'https://github.com')}
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label={`GitHub profile of ${portfolio.name}`}
@@ -149,7 +150,7 @@ export const Footer: React.FC<FooterProps> = ({ portfolio }) => {
                 <span>GITHUB // {portfolio.name.toLowerCase().replace(/\s+/g, '')}</span>
               </a>
               <a
-                href={portfolio.linkedin || 'https://linkedin.com'}
+                href={sanitizeUrl(portfolio.linkedin || 'https://linkedin.com')}
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label={`LinkedIn profile of ${portfolio.name}`}
@@ -167,7 +168,7 @@ export const Footer: React.FC<FooterProps> = ({ portfolio }) => {
                 <span>LINKEDIN // PROFESSIONAL_PROFILE</span>
               </a>
               <a
-                href={portfolio.twitter || 'https://x.com'}
+                href={sanitizeUrl(portfolio.twitter || 'https://x.com')}
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label={`Twitter/X profile of ${portfolio.name}`}

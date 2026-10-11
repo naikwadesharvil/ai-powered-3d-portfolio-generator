@@ -3,9 +3,15 @@ import { Home, ArrowLeft, Terminal } from 'lucide-react';
 
 interface NotFoundPageProps {
   onGoHome: () => void;
+  title?: string;
+  message?: string;
 }
 
-export const NotFoundPage: React.FC<NotFoundPageProps> = ({ onGoHome }) => {
+export const NotFoundPage: React.FC<NotFoundPageProps> = ({
+  onGoHome,
+  title = 'Coordinate Vector Unreachable',
+  message = 'The requested portfolio route or deep-link does not exist in the active 3D portfolio workspace.',
+}) => {
   return (
     <div
       style={{
@@ -90,7 +96,7 @@ export const NotFoundPage: React.FC<NotFoundPageProps> = ({ onGoHome }) => {
             marginBottom: '12px',
           }}
         >
-          Coordinate Vector Unreachable
+          {title}
         </h2>
 
         <p
@@ -102,7 +108,7 @@ export const NotFoundPage: React.FC<NotFoundPageProps> = ({ onGoHome }) => {
             marginBottom: '32px',
           }}
         >
-          The requested portfolio route or deep-link does not exist in the active 3D portfolio workspace.
+          {message}
         </p>
 
         {/* Actions */}

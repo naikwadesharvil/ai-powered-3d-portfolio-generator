@@ -5,6 +5,7 @@ import type { PortfolioData } from '../types/portfolio';
 import { ThreeDImageStage } from './ThreeDImageStage';
 import { TiltCard3D } from './TiltCard3D';
 import { ProjectBlueprintPreview } from './ProjectBlueprintPreview';
+import { sanitizeUrl } from '../utils/sanitize';
 
 interface SelectedWorksProps {
   portfolio: PortfolioData;
@@ -381,7 +382,7 @@ export const SelectedWorks: React.FC<SelectedWorksProps> = ({ portfolio }) => {
                   <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
                     {(project.githubUrl || (project as any).github) && (
                       <a
-                        href={project.githubUrl || (project as any).github}
+                        href={sanitizeUrl(project.githubUrl || (project as any).github)}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="btn-outline"
@@ -393,7 +394,7 @@ export const SelectedWorks: React.FC<SelectedWorksProps> = ({ portfolio }) => {
                     )}
                     {(project.demoUrl || (project as any).link) && (
                       <a
-                        href={project.demoUrl || (project as any).link}
+                        href={sanitizeUrl(project.demoUrl || (project as any).link)}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="btn-primary"

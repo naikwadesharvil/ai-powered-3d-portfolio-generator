@@ -4,6 +4,7 @@ import { LinkedinIcon, GithubIcon } from './Icons';
 import type { PortfolioData } from '../types/portfolio';
 import { FrameScrubber } from './FrameScrubber';
 import { ThreeDImageStage } from './ThreeDImageStage';
+import { sanitizeUrl } from '../utils/sanitize';
 
 interface ContactSectionProps {
   portfolio: PortfolioData;
@@ -190,7 +191,7 @@ export const ContactSection: React.FC<ContactSectionProps> = ({ portfolio }) => 
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                 <a
-                  href={`mailto:${portfolio.email}`}
+                  href={sanitizeUrl(`mailto:${portfolio.email}`)}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
@@ -294,7 +295,7 @@ export const ContactSection: React.FC<ContactSectionProps> = ({ portfolio }) => 
             >
               {portfolio.linkedin && (
                 <a
-                  href={portfolio.linkedin}
+                  href={sanitizeUrl(portfolio.linkedin)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="btn-outline"
@@ -306,7 +307,7 @@ export const ContactSection: React.FC<ContactSectionProps> = ({ portfolio }) => 
               )}
               {portfolio.github && (
                 <a
-                  href={portfolio.github}
+                  href={sanitizeUrl(portfolio.github)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="btn-outline"

@@ -9,6 +9,7 @@ import rateLimit from 'express-rate-limit';
 import { healthRouter } from './routes/health.js';
 import { aiRouter } from './routes/ai.js';
 import { resumeRouter } from './routes/resume.js';
+import { portfoliosRouter } from './routes/portfolios.js';
 import { OpenAiService } from './services/openaiService.js';
 
 const app = express();
@@ -42,14 +43,14 @@ app.use(
       return callback(null, true); // Permissive in local dev
     },
     credentials: true,
-    methods: ['GET', 'POST', 'OPTIONS'],
+    methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
   })
 );
 
-// Payload size limits to prevent Denial of Service (1MB limit)
-app.use(express.json({ limit: '1mb' }));
-app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+// Payload size limits to prevent Denial of Service (2MB limit for portfolio data)
+app.use(express.json({ limit: '2mb' }));
+app.use(express.urlencoded({ extended: true, limit: '2mb' }));
 
 // Request Timeout Middleware (45s timeout guard)
 app.use((req: Request, res: Response, next: NextFunction) => {
@@ -104,6 +105,7 @@ app.use((req: Request, _res: Response, next: NextFunction) => {
 app.use('/api/health', healthRouter);
 app.use('/api/ai', aiRouter);
 app.use('/api/resume', resumeRouter);
+app.use('/api/portfolios', portfoliosRouter);
 
 // Root informational endpoint
 app.get('/', (_req: Request, res: Response) => {
