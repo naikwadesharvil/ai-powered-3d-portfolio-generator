@@ -9,7 +9,7 @@ import { generateResumePlainText, generateResumeMarkdown, generateResumeHtml } f
 import { STUDENT_PROFILE } from './src/data/defaultProfiles.ts';
 import { AiEngine } from './src/services/aiEngine.ts';
 
-const ARTIFACT_DIR = 'C:\\Users\\sharv\\.gemini\\antigravity-ide\\brain\\374fbe7b-fdcc-47ff-94b8-e189b92df0a6';
+const ARTIFACT_DIR = 'C:\\Users\\sharv\\.gemini\\antigravity-ide\\brain\\215c0cc7-0d9b-4e35-a1a5-462d5adb0fc0';
 const CHROME_PATH = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
 
 console.log('=====================================================');
@@ -134,7 +134,7 @@ async function testPdfEndpoint(profile, filename) {
     assert(zip.file('word/styles.xml'), 'DOCX zip has word/styles.xml');
 
     const docXml = await zip.file('word/document.xml').async('string');
-    assert(docXml.includes('Sharvil Naikwade'), 'DOCX document.xml contains candidate name');
+    assert(docXml.toUpperCase().includes('SHARVIL NAIKWADE'), 'DOCX document.xml contains candidate name');
     assert(docXml.includes('PROFESSIONAL SUMMARY'), 'DOCX contains Professional Summary');
     assert(docXml.includes('TECHNICAL PROJECTS'), 'DOCX contains Technical Projects');
 

@@ -45,6 +45,15 @@ import {
 } from '../config/disciplines.ts';
 import { SplitCustomizer } from './SplitCustomizer';
 import { usePortfolioStore } from '../store/portfolioStore';
+import {
+  generateResumeHtml,
+  detectResumePlaceholders,
+  type ResumeTemplateId,
+} from '../services/resumeGenerator';
+import {
+  downloadResumePdf,
+  downloadResumeDocx,
+} from '../services/resumeService';
 
 export type StepperStep = 'details' | 'generate' | 'customize' | 'download_publish';
 
@@ -85,6 +94,43 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
     });
     return () => unsub();
   }, [onUpdatePortfolio]);
+
+  // Step 4 Resume Template Picker, Live Preview & Page Count State
+  const [step4ResumeTemplate, setStep4ResumeTemplate] = useState<ResumeTemplateId>('modern');
+  const [step4ExportingPdf, setStep4ExportingPdf] = useState(false);
+  const [step4ExportingDocx, setStep4ExportingDocx] = useState(false);
+  const activeThemeTokens = usePortfolioStore((s) => s.themeTokens);
+  const currentPortfolio = usePortfolioStore((s) => s.portfolio) || portfolio;
+
+  const step4Placeholders = React.useMemo(
+    () => detectResumePlaceholders(currentPortfolio),
+    [currentPortfolio]
+  );
+
+  const step4ResumeHtml = React.useMemo(
+    () =>
+      generateResumeHtml(currentPortfolio, {
+        template: step4ResumeTemplate,
+        accentColor: activeThemeTokens?.accentPrimary || '#00f2fe',
+      }),
+    [currentPortfolio, step4ResumeTemplate, activeThemeTokens?.accentPrimary]
+  );
+
+  const step4EstimatedPages = React.useMemo(() => {
+    let units = 120;
+    if (currentPortfolio.fullBio || currentPortfolio.shortBio) units += 100;
+    if (currentPortfolio.skills?.length) units += currentPortfolio.skills.length * 15;
+    const expCount = (currentPortfolio.experiences || (currentPortfolio as any).experience || []).length;
+    if (expCount) units += expCount * 140;
+    const eduCount = (currentPortfolio.education || []).length;
+    if (eduCount) units += eduCount * 60;
+    const projCount = (currentPortfolio.projects || []).length;
+    if (projCount) units += projCount * 120;
+    if (currentPortfolio.certifications?.length) units += currentPortfolio.certifications.length * 30;
+    if (currentPortfolio.publications?.length) units += currentPortfolio.publications.length * 35;
+    if (step4ResumeTemplate === 'compact') return Math.max(1, Math.ceil(units / 900));
+    return Math.max(1, Math.ceil(units / 650));
+  }, [currentPortfolio, step4ResumeTemplate]);
 
   // Server & Model Status
   const [serverHealth, setServerHealth] = useState<ServerHealth | null>(null);
@@ -2336,7 +2382,7 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
                   </button>
                 </div>
 
-                {/* 2. ATS Resume Studio Launcher */}
+                {/* 2. ATS Resume Studio & Live Preview */}
                 <div
                   style={{
                     padding: '20px',
@@ -2345,34 +2391,171 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
                     border: '1px solid rgba(255, 0, 85, 0.3)',
                     display: 'flex',
                     flexDirection: 'column',
-                    justifyContent: 'space-between',
-                    gap: '12px',
+                    gap: '14px',
                     textAlign: 'left',
                   }}
                 >
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--accent-magenta)', marginBottom: '6px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--accent-magenta)' }}>
                       <FileText size={18} />
-                      <span style={{ fontWeight: 700, fontSize: '0.95rem' }}>ATS Resume Studio</span>
+                      <span style={{ fontWeight: 700, fontSize: '0.95rem' }}>ATS Resume Exports</span>
                     </div>
-                    <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
-                      Download publication-ready, multi-page PDF & DOCX resumes with classic, modern, or engineering templates.
-                    </p>
+                    <span
+                      style={{
+                        fontSize: '0.72rem',
+                        fontFamily: 'var(--font-mono)',
+                        color: 'var(--accent-cyan)',
+                        background: 'rgba(0, 242, 254, 0.08)',
+                        border: '1px solid rgba(0, 242, 254, 0.25)',
+                        borderRadius: '4px',
+                        padding: '2px 8px',
+                        fontWeight: 600,
+                      }}
+                    >
+                      {step4EstimatedPages} {step4EstimatedPages === 1 ? 'PAGE' : 'PAGES'}
+                    </span>
                   </div>
+
+                  {/* Template Picker */}
+                  <div>
+                    <div style={{ fontSize: '0.74rem', color: 'var(--text-secondary)', marginBottom: '6px', fontFamily: 'var(--font-mono)' }}>
+                      RESUME TEMPLATE:
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px' }}>
+                      {(['classic', 'modern', 'compact'] as const).map((t) => (
+                        <button
+                          key={t}
+                          onClick={() => setStep4ResumeTemplate(t)}
+                          style={{
+                            padding: '6px 4px',
+                            borderRadius: '6px',
+                            border: step4ResumeTemplate === t ? '1px solid var(--accent-cyan)' : '1px solid rgba(255, 255, 255, 0.1)',
+                            background: step4ResumeTemplate === t ? 'rgba(0, 242, 254, 0.12)' : 'rgba(255, 255, 255, 0.03)',
+                            color: step4ResumeTemplate === t ? 'var(--accent-cyan)' : '#cbd5e1',
+                            fontSize: '0.72rem',
+                            fontFamily: 'var(--font-mono)',
+                            cursor: 'pointer',
+                            textTransform: 'uppercase',
+                            fontWeight: step4ResumeTemplate === t ? 700 : 500,
+                          }}
+                        >
+                          {t === 'classic' ? 'Classic ATS' : t === 'modern' ? 'Modern' : 'Compact'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Placeholder Warning Banner */}
+                  {step4Placeholders.length > 0 && (
+                    <div
+                      style={{
+                        padding: '8px 10px',
+                        borderRadius: '6px',
+                        background: 'rgba(239, 68, 68, 0.12)',
+                        border: '1px solid rgba(239, 68, 68, 0.35)',
+                        fontSize: '0.72rem',
+                        color: '#fca5a5',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                      }}
+                    >
+                      <AlertCircle size={14} color="#ef4444" />
+                      <span>{step4Placeholders.length} placeholder(s) detected (e.g. &quot;add a metric&quot;)</span>
+                    </div>
+                  )}
+
+                  {/* Live Mini Preview */}
+                  <div
+                    style={{
+                      height: '180px',
+                      background: '#ffffff',
+                      borderRadius: '6px',
+                      overflow: 'hidden',
+                      border: '1px solid rgba(255, 255, 255, 0.2)',
+                      boxShadow: '0 4px 15px rgba(0, 0, 0, 0.5)',
+                    }}
+                  >
+                    <iframe
+                      title="Step 4 Live Resume Preview"
+                      srcDoc={step4ResumeHtml}
+                      style={{
+                        width: '200%',
+                        height: '200%',
+                        transform: 'scale(0.5)',
+                        transformOrigin: 'top left',
+                        border: 'none',
+                        pointerEvents: 'none',
+                      }}
+                    />
+                  </div>
+
+                  {/* Export Action Buttons */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                    <button
+                      onClick={async () => {
+                        if (step4Placeholders.length > 0) {
+                          const proceed = window.confirm(`Warning: Your profile has ${step4Placeholders.length} placeholder(s) (e.g. "${step4Placeholders[0]}"). Export anyway?`);
+                          if (!proceed) return;
+                        }
+                        setStep4ExportingPdf(true);
+                        try {
+                          await downloadResumePdf(currentPortfolio, {
+                            template: step4ResumeTemplate,
+                            accentColor: activeThemeTokens?.accentPrimary || '#00f2fe',
+                          });
+                        } finally {
+                          setStep4ExportingPdf(false);
+                        }
+                      }}
+                      disabled={step4ExportingPdf}
+                      className="btn-primary"
+                      style={{ padding: '8px', justifyContent: 'center', fontSize: '0.76rem' }}
+                    >
+                      <span>{step4ExportingPdf ? 'EXPORTING...' : 'PDF EXPORT'}</span>
+                    </button>
+                    <button
+                      onClick={async () => {
+                        if (step4Placeholders.length > 0) {
+                          const proceed = window.confirm(`Warning: Your profile has ${step4Placeholders.length} placeholder(s) (e.g. "${step4Placeholders[0]}"). Export anyway?`);
+                          if (!proceed) return;
+                        }
+                        setStep4ExportingDocx(true);
+                        try {
+                          await downloadResumeDocx(currentPortfolio, {
+                            template: step4ResumeTemplate,
+                            accentColor: activeThemeTokens?.accentPrimary || '#00f2fe',
+                          });
+                        } finally {
+                          setStep4ExportingDocx(false);
+                        }
+                      }}
+                      disabled={step4ExportingDocx}
+                      className="btn-primary"
+                      style={{ padding: '8px', justifyContent: 'center', fontSize: '0.76rem', background: 'linear-gradient(135deg, #0284c7, #2563eb)' }}
+                    >
+                      <span>{step4ExportingDocx ? 'EXPORTING...' : 'DOCX EXPORT'}</span>
+                    </button>
+                  </div>
+
                   <button
                     onClick={() => {
                       onClose();
                       if (onOpenResume) onOpenResume();
                     }}
-                    className="btn-primary"
                     style={{
-                      padding: '12px',
-                      justifyContent: 'center',
-                      fontSize: '0.88rem',
-                      background: 'linear-gradient(135deg, var(--accent-magenta), #cc0044)',
+                      background: 'transparent',
+                      border: 'none',
+                      color: 'var(--accent-magenta)',
+                      fontSize: '0.75rem',
+                      fontFamily: 'var(--font-mono)',
+                      cursor: 'pointer',
+                      textAlign: 'center',
+                      textDecoration: 'underline',
+                      marginTop: '-4px',
                     }}
                   >
-                    <span>OPEN RESUME STUDIO</span>
+                    Launch Full ATS Resume Studio &rarr;
                   </button>
                 </div>
               </div>

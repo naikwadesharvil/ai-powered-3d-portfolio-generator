@@ -12,10 +12,12 @@ import {
   ZoomIn,
   ZoomOut,
   FileDown,
+  AlertCircle,
 } from 'lucide-react';
 import type { PortfolioData } from '../types/portfolio';
 import {
   generateResumeHtml,
+  detectResumePlaceholders,
   RESUME_TEMPLATES,
   RESUME_ACCENT_COLORS,
   type ResumeTemplateId,
@@ -26,6 +28,7 @@ import {
   downloadResumeDocx,
   copyResumePlainText,
 } from '../services/resumeService';
+import { usePortfolioStore } from '../store/portfolioStore';
 
 interface ResumeModalProps {
   portfolio: PortfolioData;
@@ -33,11 +36,22 @@ interface ResumeModalProps {
   onClose: () => void;
 }
 
-export const ResumeModal: React.FC<ResumeModalProps> = ({ portfolio, isOpen, onClose }) => {
+export const ResumeModal: React.FC<ResumeModalProps> = ({ portfolio: initialPortfolio, isOpen, onClose }) => {
+  const storePortfolio = usePortfolioStore((s) => s.portfolio);
+  const themeTokens = usePortfolioStore((s) => s.themeTokens);
+  const activePortfolio = storePortfolio || initialPortfolio;
+
   const [template, setTemplate] = useState<ResumeTemplateId>('modern');
-  const [accentColor, setAccentColor] = useState<string>('#1e3a8a');
+  const [accentColor, setAccentColor] = useState<string>(themeTokens?.accentPrimary || '#00f2fe');
   const [fontSize, setFontSize] = useState<'compact' | 'standard' | 'large'>('standard');
   const [zoom, setZoom] = useState<number>(100);
+
+  // Update accent color if theme token changes and user is on modern template
+  useEffect(() => {
+    if (themeTokens?.accentPrimary && template === 'modern') {
+      setAccentColor(themeTokens.accentPrimary);
+    }
+  }, [themeTokens?.accentPrimary, template]);
 
   // Section visibility toggles
   const [showSummary, setShowSummary] = useState(true);
@@ -54,10 +68,16 @@ export const ResumeModal: React.FC<ResumeModalProps> = ({ portfolio, isOpen, onC
   const [copiedText, setCopiedText] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
+  // Placeholders audit
+  const detectedPlaceholders = useMemo(
+    () => detectResumePlaceholders(activePortfolio),
+    [activePortfolio]
+  );
+
   const renderOptions: ResumeRenderOptions = useMemo(
     () => ({
       template,
-      accentColor,
+      accentColor: template === 'modern' ? (accentColor || themeTokens?.accentPrimary || '#00f2fe') : accentColor,
       fontSize,
       showSummary,
       showSkills,
@@ -70,6 +90,7 @@ export const ResumeModal: React.FC<ResumeModalProps> = ({ portfolio, isOpen, onC
     [
       template,
       accentColor,
+      themeTokens?.accentPrimary,
       fontSize,
       showSummary,
       showSkills,
@@ -81,18 +102,50 @@ export const ResumeModal: React.FC<ResumeModalProps> = ({ portfolio, isOpen, onC
     ]
   );
 
+  // Estimated page count calculation
+  const estimatedPages = useMemo(() => {
+    let units = 120;
+    if (showSummary && (activePortfolio.fullBio || activePortfolio.shortBio)) units += 100;
+    if (showSkills && activePortfolio.skills?.length) units += activePortfolio.skills.length * 15;
+    const expCount = (activePortfolio.experiences || (activePortfolio as any).experience || []).length;
+    if (showExperience && expCount) units += expCount * 140;
+    const eduCount = (activePortfolio.education || []).length;
+    if (showEducation && eduCount) units += eduCount * 60;
+    const projCount = (activePortfolio.projects || []).length;
+    if (showProjects && projCount) units += projCount * 120;
+    if (showCertifications && activePortfolio.certifications?.length) units += activePortfolio.certifications.length * 30;
+    if (showPublications && activePortfolio.publications?.length) units += activePortfolio.publications.length * 35;
+    if (template === 'compact') return Math.max(1, Math.ceil(units / 900));
+    return Math.max(1, Math.ceil(units / 650));
+  }, [
+    activePortfolio,
+    showSummary,
+    showSkills,
+    showExperience,
+    showEducation,
+    showProjects,
+    showCertifications,
+    showPublications,
+    template,
+  ]);
+
   // Generate real HTML matching the PDF output
   const resumeHtml = useMemo(
-    () => generateResumeHtml(portfolio, renderOptions),
-    [portfolio, renderOptions]
+    () => generateResumeHtml(activePortfolio, renderOptions),
+    [activePortfolio, renderOptions]
   );
 
-
   const handleDownloadPdf = async () => {
+    if (detectedPlaceholders.length > 0) {
+      const proceed = window.confirm(
+        `Export Warning: Found ${detectedPlaceholders.length} placeholder(s) in your profile (e.g., "${detectedPlaceholders[0]}"). Export anyway?`
+      );
+      if (!proceed) return;
+    }
     setDownloadingPdf(true);
     setStatusMessage('Generating publication-quality ATS PDF...');
     try {
-      const res = await downloadResumePdf(portfolio, renderOptions);
+      const res = await downloadResumePdf(activePortfolio, renderOptions);
       if (res.success) {
         setStatusMessage('PDF downloaded successfully!');
       } else {
@@ -107,10 +160,16 @@ export const ResumeModal: React.FC<ResumeModalProps> = ({ portfolio, isOpen, onC
   };
 
   const handleDownloadDocx = async () => {
+    if (detectedPlaceholders.length > 0) {
+      const proceed = window.confirm(
+        `Export Warning: Found ${detectedPlaceholders.length} placeholder(s) in your profile (e.g., "${detectedPlaceholders[0]}"). Export anyway?`
+      );
+      if (!proceed) return;
+    }
     setDownloadingDocx(true);
     setStatusMessage('Generating editable Microsoft Word (.docx)...');
     try {
-      const res = await downloadResumeDocx(portfolio);
+      const res = await downloadResumeDocx(activePortfolio, renderOptions);
       if (res.success) {
         setStatusMessage('Word document downloaded successfully!');
       } else {
@@ -125,7 +184,7 @@ export const ResumeModal: React.FC<ResumeModalProps> = ({ portfolio, isOpen, onC
   };
 
   const handleCopyText = async () => {
-    const success = await copyResumePlainText(portfolio);
+    const success = await copyResumePlainText(activePortfolio);
     if (success) {
       setCopiedText(true);
       setStatusMessage('Plaintext ATS resume copied to clipboard!');
@@ -251,7 +310,7 @@ export const ResumeModal: React.FC<ResumeModalProps> = ({ portfolio, isOpen, onC
                   color: 'var(--text-secondary)',
                 }}
               >
-                RECIPIENT: RECRUITERS & HIRING MANAGERS // CANDIDATE: {portfolio.name.toUpperCase()}
+                RECIPIENT: RECRUITERS & HIRING MANAGERS // CANDIDATE: {(activePortfolio.name || 'Candidate').toUpperCase()}
               </div>
             </div>
           </div>
@@ -324,9 +383,34 @@ export const ResumeModal: React.FC<ResumeModalProps> = ({ portfolio, isOpen, onC
               overflowY: 'auto',
               display: 'flex',
               flexDirection: 'column',
-              gap: '24px',
+              gap: '20px',
             }}
           >
+            {/* Unresolved Placeholders Warning Banner */}
+            {detectedPlaceholders.length > 0 && (
+              <div
+                style={{
+                  padding: '12px 14px',
+                  borderRadius: '8px',
+                  background: 'rgba(239, 68, 68, 0.12)',
+                  border: '1px solid rgba(239, 68, 68, 0.4)',
+                  color: '#fca5a5',
+                  fontSize: '0.78rem',
+                  lineHeight: 1.4,
+                }}
+              >
+                <div style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px', color: '#f87171' }}>
+                  <AlertCircle size={15} />
+                  <span>{detectedPlaceholders.length} Placeholder(s) Detected</span>
+                </div>
+                <div style={{ fontSize: '0.72rem', color: '#fecaca', maxHeight: '70px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                  {detectedPlaceholders.map((p, i) => (
+                    <div key={i}>• {p}</div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Template Selection */}
             <div>
               <label
@@ -585,6 +669,20 @@ export const ResumeModal: React.FC<ResumeModalProps> = ({ portfolio, isOpen, onC
                 >
                   <Eye size={14} color="var(--accent-cyan)" />
                   <span>PREVIEW MODE: A4 PORTRAIT (210 × 297 mm)</span>
+                </span>
+                <span
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '0.72rem',
+                    color: 'var(--accent-cyan)',
+                    background: 'rgba(0, 242, 254, 0.1)',
+                    border: '1px solid rgba(0, 242, 254, 0.3)',
+                    borderRadius: '4px',
+                    padding: '2px 8px',
+                    fontWeight: 600,
+                  }}
+                >
+                  {estimatedPages} {estimatedPages === 1 ? 'PAGE' : 'PAGES'}
                 </span>
               </div>
 

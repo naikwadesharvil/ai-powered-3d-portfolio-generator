@@ -64,13 +64,14 @@ export async function downloadResumePdf(
  * Download standard, editable Microsoft Word (.docx) file
  */
 export async function downloadResumeDocx(
-  portfolio: PortfolioData
+  portfolio: PortfolioData,
+  options: ResumeRenderOptions = {}
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const safeName = portfolio.name.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const safeName = (portfolio.name || 'Candidate').replace(/[^a-zA-Z0-9_-]/g, '_');
     const filename = `${safeName}_Resume.docx`;
 
-    const blob = await generateDocxBlob(portfolio);
+    const blob = await generateDocxBlob(portfolio, options);
     saveAs(blob, filename);
     return { success: true };
   } catch (err) {

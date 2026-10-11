@@ -1,6 +1,6 @@
 import type { PortfolioData, ProjectItem, TechSkill, EducationItem } from '../types/portfolio';
 
-export type ResumeTemplateId = 'modern' | 'classic' | 'engineering';
+export type ResumeTemplateId = 'classic' | 'modern' | 'compact' | 'engineering';
 
 export interface ResumeRenderOptions {
   template?: ResumeTemplateId;
@@ -17,19 +17,19 @@ export interface ResumeRenderOptions {
 
 export const RESUME_TEMPLATES: { id: ResumeTemplateId; name: string; description: string }[] = [
   {
-    id: 'modern',
-    name: 'Modern ATS (Clean & Scannable)',
-    description: 'High-clarity sans-serif layout with subtle accent rules. Optimised for ATS parsers and technical screeners.',
-  },
-  {
     id: 'classic',
-    name: 'Classic Executive (Standard Corporate)',
-    description: 'Traditional centered header with classic horizontal rules. Preferred for formal corporate and academic roles.',
+    name: 'Classic ATS (Single Column)',
+    description: 'Clean single-column layout, standard headings, no tables/icons/images. 100% scannable by ATS parsers.',
   },
   {
-    id: 'engineering',
-    name: 'Engineering Technical (Metric-Oriented)',
-    description: 'Structured layout emphasizing CAD/hardware tools, verified system metrics, and technical competencies.',
+    id: 'modern',
+    name: 'Modern (Theme Accent)',
+    description: 'Contemporary sans-serif typography with accent color styling derived from theme tokens.',
+  },
+  {
+    id: 'compact',
+    name: 'Compact (Dense One-Page)',
+    description: 'Dense, space-optimized layout with 10mm margins engineered to fit comprehensive profiles onto 1 page.',
   },
 ];
 
@@ -40,6 +40,81 @@ export const RESUME_ACCENT_COLORS = [
   { name: 'Deep Crimson', hex: '#991b1b' },
   { name: 'Steel Indigo', hex: '#3730a3' },
 ];
+
+/**
+ * Detect placeholder text such as "add a metric here", "e.g.,", "TODO" that must never appear in an exported resume.
+ * Returns an array of descriptive messages for each detected placeholder.
+ */
+export function detectResumePlaceholders(portfolio: PortfolioData): string[] {
+  const issues: string[] = [];
+  const placeholderRegexes = [
+    /add a metric here/i,
+    /add a metric/i,
+    /insert metric/i,
+    /metric here/i,
+    /\be\.g\.,?/i,
+    /\btodo\b/i,
+    /\btbd\b/i,
+    /\bfixme\b/i,
+    /\bplaceholder\b/i,
+    /\[(?:Company|Role|Metric|Project|Degree|Institution|Your Name)\]/i,
+    /\bxyz\b/i,
+  ];
+
+  const scanText = (val: string | undefined | null, field: string) => {
+    if (!val || typeof val !== 'string') return;
+    for (const rx of placeholderRegexes) {
+      if (rx.test(val)) {
+        issues.push(`${field}: contains placeholder "${val.trim().substring(0, 50)}"`);
+        break;
+      }
+    }
+  };
+
+  scanText(portfolio.name, 'Full Name');
+  scanText(portfolio.targetRole, 'Target Role');
+  scanText(portfolio.tagline, 'Tagline');
+  scanText(portfolio.role, 'Role');
+  scanText(portfolio.shortBio, 'Short Bio');
+  scanText(portfolio.fullBio, 'Full Bio');
+
+  portfolio.projects?.forEach((proj, idx) => {
+    const pTitle = proj.title || `Project #${idx + 1}`;
+    scanText(proj.title, `Project (${pTitle}) Title`);
+    scanText(proj.description, `Project (${pTitle}) Description`);
+    scanText(proj.metrics, `Project (${pTitle}) Metrics`);
+  });
+
+  const expList = portfolio.experiences || (portfolio as any).experience || [];
+  expList.forEach((exp: any, idx: number) => {
+    const expName = `${exp.role || exp.title || 'Role'} at ${exp.company || 'Company'} #${idx + 1}`;
+    scanText(exp.role || exp.title, `Experience (${expName}) Role`);
+    scanText(exp.company, `Experience (${expName}) Company`);
+    scanText(exp.description, `Experience (${expName}) Description`);
+    const bullets = (exp.highlights && exp.highlights.length > 0 ? exp.highlights : exp.points) || [];
+    bullets.forEach((b: string, bIdx: number) => {
+      scanText(b, `Experience (${expName}) Bullet #${bIdx + 1}`);
+    });
+  });
+
+  portfolio.education?.forEach((edu, idx) => {
+    const eduName = `${edu.degree || 'Degree'} at ${edu.institution || 'School'} #${idx + 1}`;
+    scanText(edu.degree, `Education (${eduName}) Degree`);
+    scanText(edu.institution, `Education (${eduName}) Institution`);
+  });
+
+  portfolio.certifications?.forEach((cert, idx) => {
+    scanText(cert.name, `Certification #${idx + 1} Name`);
+    scanText(cert.issuer, `Certification #${idx + 1} Issuer`);
+  });
+
+  portfolio.publications?.forEach((pub, idx) => {
+    scanText(pub.title, `Publication #${idx + 1} Title`);
+    scanText(pub.publisher, `Publication #${idx + 1} Publisher`);
+  });
+
+  return issues;
+}
 
 /**
  * Clean and escape HTML text to prevent XSS and formatting breaks
@@ -89,53 +164,59 @@ export function generateResumeHtml(
     showPublications = true,
   } = options;
 
-  const fontScale =
-    fontSize === 'compact'
-      ? { base: '9.5pt', h1: '19pt', h2: '11.5pt', h3: '10pt', lead: '9pt', gap: '8px' }
-      : fontSize === 'large'
-      ? { base: '11pt', h1: '23pt', h2: '13pt', h3: '11.5pt', lead: '10.5pt', gap: '14px' }
-      : { base: '10pt', h1: '21pt', h2: '12pt', h3: '10.5pt', lead: '9.5pt', gap: '11px' };
+  const isClassic = template === 'classic';
+  const isCompact = template === 'compact';
 
-  const fontFamily =
-    template === 'classic'
-      ? `'Times New Roman', Times, 'Georgia', serif`
-      : `'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif`;
+  // Resolved accent color (Classic is strictly neutral dark for ATS parsers)
+  const resolvedAccent = isClassic ? '#111827' : (accentColor || '#1e3a8a');
+
+  const fontScale =
+    isCompact || fontSize === 'compact'
+      ? { base: '8.8pt', h1: '16.5pt', h2: '10.5pt', h3: '9.4pt', lead: '8.5pt', gap: '5px' }
+      : fontSize === 'large'
+      ? { base: '11pt', h1: '23pt', h2: '13pt', h3: '11.5pt', lead: '10.5pt', gap: '13px' }
+      : { base: '10pt', h1: '21pt', h2: '12pt', h3: '10.5pt', lead: '9.5pt', gap: '10px' };
+
+  const fontFamily = isClassic
+    ? `'Times New Roman', Times, 'Georgia', serif`
+    : `'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif`;
 
   // Contact items array
   const contacts: string[] = [];
-  if (portfolio.email) {
-    contacts.push(`<span>${escapeHtml(portfolio.email)}</span>`);
+  if (portfolio.email?.trim()) {
+    contacts.push(`<span>${escapeHtml(portfolio.email.trim())}</span>`);
   }
-  if (portfolio.phone) {
-    contacts.push(`<span>${escapeHtml(portfolio.phone)}</span>`);
+  if (portfolio.phone?.trim()) {
+    contacts.push(`<span>${escapeHtml(portfolio.phone.trim())}</span>`);
   }
-  if (portfolio.location) {
-    contacts.push(`<span>${escapeHtml(portfolio.location)}</span>`);
+  if (portfolio.location?.trim()) {
+    contacts.push(`<span>${escapeHtml(portfolio.location.trim())}</span>`);
   }
-  if (portfolio.linkedin) {
-    const cleanLink = portfolio.linkedin.replace(/^https?:\/\/(www\.)?/, '');
+  if (portfolio.linkedin?.trim()) {
+    const cleanLink = portfolio.linkedin.trim().replace(/^https?:\/\/(www\.)?/, '');
     contacts.push(`<span>${escapeHtml(cleanLink)}</span>`);
   }
-  if (portfolio.github) {
-    const cleanGit = portfolio.github.replace(/^https?:\/\/(www\.)?/, '');
+  if (portfolio.github?.trim()) {
+    const cleanGit = portfolio.github.trim().replace(/^https?:\/\/(www\.)?/, '');
     contacts.push(`<span>${escapeHtml(cleanGit)}</span>`);
   }
 
   // Skills grouped
-  const skillGroups = groupSkillsByCategory(portfolio.skills || []);
+  const validSkills = (portfolio.skills || []).filter((s) => s.name?.trim());
+  const skillGroups = groupSkillsByCategory(validSkills);
 
-  // Header styles per template
-  const isCentered = template === 'classic';
+  // Header alignment
+  const isCentered = isClassic;
 
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>${escapeHtml(portfolio.name)} - Resume</title>
+  <title>${escapeHtml(portfolio.name || 'Candidate')} - Resume</title>
   <style>
     @page {
       size: A4 portrait;
-      margin: 15mm 15mm 15mm 15mm;
+      margin: ${isCompact ? '10mm' : '15mm'};
     }
     *, *:before, *:after {
       box-sizing: border-box;
@@ -145,10 +226,13 @@ export function generateResumeHtml(
       padding: 0;
       font-family: ${fontFamily};
       font-size: ${fontScale.base};
-      line-height: 1.45;
+      line-height: ${isCompact ? '1.32' : '1.45'};
       color: #111827;
       background: #ffffff;
       -webkit-font-smoothing: antialiased;
+      word-break: break-word;
+      overflow-wrap: break-word;
+      user-select: text;
     }
     .resume-sheet {
       width: 100%;
@@ -160,7 +244,7 @@ export function generateResumeHtml(
     .header {
       text-align: ${isCentered ? 'center' : 'left'};
       padding-bottom: ${fontScale.gap};
-      border-bottom: 2px solid ${accentColor};
+      border-bottom: ${isClassic ? '1px solid #111827' : `2px solid ${resolvedAccent}`};
       margin-bottom: ${fontScale.gap};
     }
     .name {
@@ -169,28 +253,28 @@ export function generateResumeHtml(
       letter-spacing: -0.01em;
       color: #0f172a;
       text-transform: uppercase;
-      margin: 0 0 4px 0;
+      margin: 0 0 3px 0;
     }
     .target-role {
       font-size: ${fontScale.h3};
       font-weight: 600;
-      color: ${accentColor};
+      color: ${resolvedAccent};
       text-transform: uppercase;
-      letter-spacing: 0.05em;
-      margin: 0 0 6px 0;
+      letter-spacing: 0.04em;
+      margin: 0 0 5px 0;
     }
     .contact-row {
       display: flex;
       flex-wrap: wrap;
       justify-content: ${isCentered ? 'center' : 'flex-start'};
-      gap: 6px 14px;
+      gap: 4px 12px;
       font-size: ${fontScale.lead};
-      color: #475569;
+      color: #374151;
     }
     .contact-row span:not(:last-child):after {
       content: " •";
-      margin-left: 10px;
-      color: #94a3b8;
+      margin-left: 8px;
+      color: #9ca3af;
     }
     .section {
       margin-top: ${fontScale.gap};
@@ -201,15 +285,15 @@ export function generateResumeHtml(
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.05em;
-      color: ${accentColor};
-      border-bottom: 1px solid #cbd5e1;
-      padding-bottom: 3px;
-      margin: 0 0 8px 0;
+      color: ${resolvedAccent};
+      border-bottom: ${isClassic ? '1px solid #111827' : `1.5px solid ${resolvedAccent}`};
+      padding-bottom: 2px;
+      margin: 0 0 ${isCompact ? '5px' : '7px'} 0;
       page-break-after: avoid;
       break-after: avoid;
     }
     .entry {
-      margin-bottom: 9px;
+      margin-bottom: ${isCompact ? '5px' : '8px'};
       page-break-inside: avoid;
       break-inside: avoid;
     }
@@ -231,57 +315,50 @@ export function generateResumeHtml(
     }
     .entry-date {
       font-size: ${fontScale.lead};
-      color: #64748b;
+      color: #4b5563;
       font-weight: 500;
       white-space: nowrap;
     }
     .entry-badge {
       display: inline-block;
       font-size: 8pt;
-      padding: 1px 6px;
-      background: #f1f5f9;
-      border: 1px solid #cbd5e1;
+      padding: 1px 5px;
+      background: #f3f4f6;
+      border: 1px solid #d1d5db;
       border-radius: 3px;
       margin-left: 6px;
       font-weight: 600;
-      color: #475569;
+      color: #374151;
     }
     ul.bullets {
-      margin: 3px 0 6px 0;
+      margin: ${isCompact ? '2px 0 4px 0' : '3px 0 5px 0'};
       padding-left: 18px;
     }
     ul.bullets li {
-      margin-bottom: 3px;
-      color: #334155;
+      margin-bottom: ${isCompact ? '1.5px' : '2.5px'};
+      color: #1f2937;
     }
-    .skills-grid {
-      display: table;
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 4px;
+    .skills-block {
+      margin-top: 3px;
     }
     .skills-row {
-      display: table-row;
+      margin-bottom: ${isCompact ? '2px' : '4px'};
+      line-height: ${isCompact ? '1.3' : '1.4'};
     }
     .skills-label {
-      display: table-cell;
       font-weight: 700;
-      width: 28%;
-      padding: 2px 8px 3px 0;
-      color: #1e293b;
-      vertical-align: top;
-      white-space: nowrap;
+      color: #111827;
+      display: inline;
     }
     .skills-list {
-      display: table-cell;
-      padding: 2px 0 3px 0;
-      color: #334155;
-      vertical-align: top;
+      color: #374151;
+      display: inline;
     }
     .summary-text {
-      color: #334155;
+      color: #1f2937;
       margin: 0;
       text-align: justify;
+      line-height: ${isCompact ? '1.32' : '1.45'};
     }
     @media print {
       body {
@@ -298,19 +375,20 @@ export function generateResumeHtml(
   <div class="resume-sheet">
     <!-- Header -->
     <header class="header">
-      <h1 class="name">${escapeHtml(portfolio.name)}</h1>
-      <div class="target-role">${escapeHtml(portfolio.targetRole || portfolio.tagline || portfolio.role)}</div>
+      <h1 class="name">${escapeHtml(portfolio.name || 'Candidate')}</h1>
+      ${(portfolio.targetRole || portfolio.tagline || portfolio.role) ? `<div class="target-role">${escapeHtml(portfolio.targetRole || portfolio.tagline || portfolio.role)}</div>` : ''}
+      ${contacts.length > 0 ? `
       <div class="contact-row">
         ${contacts.join('\n        ')}
-      </div>
+      </div>` : ''}
     </header>
 
     ${
-      showSummary && (portfolio.fullBio || portfolio.shortBio)
+      showSummary && (portfolio.fullBio?.trim() || portfolio.shortBio?.trim())
         ? `<!-- Professional Summary -->
     <section class="section">
       <h2 class="section-title">Professional Summary</h2>
-      <p class="summary-text">${escapeHtml(portfolio.fullBio || portfolio.shortBio)}</p>
+      <p class="summary-text">${escapeHtml(portfolio.fullBio?.trim() || portfolio.shortBio?.trim())}</p>
     </section>`
         : ''
     }
@@ -320,13 +398,13 @@ export function generateResumeHtml(
         ? `<!-- Technical & Core Skills -->
     <section class="section">
       <h2 class="section-title">Technical Competencies</h2>
-      <div class="skills-grid">
+      <div class="skills-block">
         ${Object.entries(skillGroups)
           .map(
             ([cat, list]) => `
         <div class="skills-row">
-          <div class="skills-label">${escapeHtml(cat)}:</div>
-          <div class="skills-list">${escapeHtml(list.join(', '))}</div>
+          <span class="skills-label">${escapeHtml(cat)}: </span>
+          <span class="skills-list">${escapeHtml(list.join(', '))}</span>
         </div>`
           )
           .join('')}
@@ -336,11 +414,13 @@ export function generateResumeHtml(
     }
 
     ${(() => {
-      const expList = portfolio.experiences || (portfolio as any).experience || [];
+      const expList = (portfolio.experiences || (portfolio as any).experience || []).filter(
+        (e: any) => (e.role && e.role.trim()) || (e.company && e.company.trim()) || (e.title && e.title.trim())
+      );
       if (!showExperience || expList.length === 0) return '';
       return `<!-- Professional Experience & Training -->
     <section class="section">
-      <h2 class="section-title">Professional Experience & Training</h2>
+      <h2 class="section-title">Professional Experience</h2>
       ${expList
         .map(
           (exp: any) => `
@@ -348,16 +428,16 @@ export function generateResumeHtml(
         <div class="entry-header">
           <div>
             <span class="entry-title">${escapeHtml(exp.role || exp.title)}</span>
-            <span class="entry-subtitle"> — ${escapeHtml(exp.company)}</span>
+            ${exp.company?.trim() ? `<span class="entry-subtitle"> — ${escapeHtml(exp.company)}</span>` : ''}
           </div>
-          <span class="entry-date">${escapeHtml(exp.period)}</span>
+          ${exp.period?.trim() ? `<span class="entry-date">${escapeHtml(exp.period)}</span>` : ''}
         </div>
-        ${exp.description ? `<p style="margin: 2px 0 4px 0; color: #475569;">${escapeHtml(exp.description)}</p>` : ''}
+        ${exp.description?.trim() ? `<p style="margin: 2px 0 3px 0; color: #374151;">${escapeHtml(exp.description.trim())}</p>` : ''}
         ${
           (exp.highlights && exp.highlights.length > 0 ? exp.highlights : exp.points) &&
-          (exp.highlights || exp.points).length > 0
+          (exp.highlights || exp.points).some((h: string) => h && h.trim())
             ? `<ul class="bullets">
-          ${(exp.highlights || exp.points).map((h: string) => `<li>${escapeHtml(h)}</li>`).join('\n          ')}
+          ${(exp.highlights || exp.points).filter((h: string) => h && h.trim()).map((h: string) => `<li>${escapeHtml(h)}</li>`).join('\n          ')}
         </ul>`
             : ''
         }
@@ -367,52 +447,54 @@ export function generateResumeHtml(
     </section>`;
     })()}
 
-    ${
-      showEducation && portfolio.education && portfolio.education.length > 0
-        ? `<!-- Education -->
+    ${(() => {
+      const eduList = (portfolio.education || []).filter((e: EducationItem) => (e.degree && e.degree.trim()) || (e.institution && e.institution.trim()));
+      if (!showEducation || eduList.length === 0) return '';
+      return `<!-- Education -->
     <section class="section">
       <h2 class="section-title">Education</h2>
-      ${portfolio.education
+      ${eduList
         .map(
           (edu: EducationItem) => `
       <div class="entry">
         <div class="entry-header">
           <div>
             <span class="entry-title">${escapeHtml(edu.degree)}</span>
-            <span class="entry-subtitle"> — ${escapeHtml(edu.institution)}</span>
-            ${edu.score ? `<span class="entry-badge">${escapeHtml(edu.score)}</span>` : ''}
+            ${edu.institution?.trim() ? `<span class="entry-subtitle"> — ${escapeHtml(edu.institution)}</span>` : ''}
+            ${edu.score?.trim() ? (isClassic ? ` <span style="font-size: 8.5pt; color: #4b5563;">(${escapeHtml(edu.score)})</span>` : `<span class="entry-badge">${escapeHtml(edu.score)}</span>`) : ''}
           </div>
-          <span class="entry-date">${escapeHtml(edu.period)}</span>
+          ${edu.period?.trim() ? `<span class="entry-date">${escapeHtml(edu.period)}</span>` : ''}
         </div>
       </div>`
         )
         .join('')}
-    </section>`
-        : ''
-    }
+    </section>`;
+    })()}
 
-    ${
-      showProjects && portfolio.projects && portfolio.projects.length > 0
-        ? `<!-- Technical Projects -->
+    ${(() => {
+      const projList = (portfolio.projects || []).filter((p: ProjectItem) => p.title && p.title.trim());
+      if (!showProjects || projList.length === 0) return '';
+      return `<!-- Technical Projects -->
     <section class="section">
       <h2 class="section-title">Technical Projects</h2>
-      ${portfolio.projects
+      ${projList
         .map(
           (proj: ProjectItem) => `
       <div class="entry">
         <div class="entry-header">
           <div>
             <span class="entry-title">${escapeHtml(proj.title)}</span>
-            ${proj.role ? `<span class="entry-subtitle"> (${escapeHtml(proj.role)})</span>` : ''}
-            ${proj.isAiIdea ? '<span class="entry-badge" style="color: #7c3aed; background: #f5f3ff;">Proposed Concept</span>' : ''}
+            ${proj.role?.trim() ? `<span class="entry-subtitle"> (${escapeHtml(proj.role)})</span>` : ''}
+            ${proj.isAiIdea && !isClassic ? '<span class="entry-badge" style="color: #6d28d9; background: #f5f3ff;">Proposed Concept</span>' : ''}
           </div>
-          ${proj.date ? `<span class="entry-date">${escapeHtml(proj.date)}</span>` : ''}
+          ${proj.date?.trim() ? `<span class="entry-date">${escapeHtml(proj.date)}</span>` : ''}
         </div>
+        ${proj.description?.trim() || proj.metrics?.trim() || (proj.tags && proj.tags.length > 0) ? `
         <ul class="bullets">
-          <li>${escapeHtml(proj.description)}</li>
+          ${proj.description?.trim() ? `<li>${escapeHtml(proj.description.trim())}</li>` : ''}
           ${
-            proj.metrics
-              ? `<li><strong>Outcome / Key Metric:</strong> ${escapeHtml(proj.metrics)}</li>`
+            proj.metrics?.trim()
+              ? `<li><strong>Outcome / Key Metric:</strong> ${escapeHtml(proj.metrics.trim())}</li>`
               : ''
           }
           ${
@@ -420,50 +502,50 @@ export function generateResumeHtml(
               ? `<li><strong>Technologies:</strong> ${escapeHtml(proj.tags.join(', '))}</li>`
               : ''
           }
-        </ul>
+        </ul>` : ''}
       </div>`
         )
         .join('')}
-    </section>`
-        : ''
-    }
+    </section>`;
+    })()}
 
-    ${
-      showCertifications && portfolio.certifications && portfolio.certifications.length > 0
-        ? `<!-- Certifications & Credentials -->
+    ${(() => {
+      const certList = (portfolio.certifications || []).filter((c) => c.name && c.name.trim());
+      if (!showCertifications || certList.length === 0) return '';
+      return `<!-- Certifications & Credentials -->
     <section class="section">
       <h2 class="section-title">Certifications & Credentials</h2>
       <ul class="bullets">
-        ${portfolio.certifications
+        ${certList
           .map(
             (c) =>
-              `<li><strong>${escapeHtml(c.name)}</strong> — ${escapeHtml(c.issuer)}${c.date ? ` (${escapeHtml(c.date)})` : ''}</li>`
+              `<li><strong>${escapeHtml(c.name)}</strong>${c.issuer?.trim() ? ` — ${escapeHtml(c.issuer)}` : ''}${c.date?.trim() ? ` (${escapeHtml(c.date)})` : ''}</li>`
           )
           .join('\n        ')}
       </ul>
-    </section>`
-        : ''
-    }
+    </section>`;
+    })()}
 
-    ${
-      showPublications && portfolio.publications && portfolio.publications.length > 0
-        ? `<!-- Publications & Research -->
+    ${(() => {
+      const pubList = (portfolio.publications || []).filter((pb) => pb.title && pb.title.trim());
+      if (!showPublications || pubList.length === 0) return '';
+      return `<!-- Publications & Research -->
     <section class="section">
       <h2 class="section-title">Publications & Research</h2>
       <ul class="bullets">
-        ${portfolio.publications
+        ${pubList
           .map(
             (pb) => {
-              const datePart = pb.date ? ` (${escapeHtml(pb.date)})` : '';
-              const awardPart = pb.award ? ` [${escapeHtml(pb.award)}]` : '';
-              return `<li>"${escapeHtml(pb.title)}" — <em>${escapeHtml(pb.publisher)}</em>${datePart}${awardPart}</li>`;
+              const datePart = pb.date?.trim() ? ` (${escapeHtml(pb.date)})` : '';
+              const awardPart = pb.award?.trim() ? ` [${escapeHtml(pb.award)}]` : '';
+              const pubPart = pb.publisher?.trim() ? ` — <em>${escapeHtml(pb.publisher)}</em>` : '';
+              return `<li>"${escapeHtml(pb.title)}"${pubPart}${datePart}${awardPart}</li>`;
             }
           )
           .join('\n        ')}
       </ul>
-    </section>`
-        : ''
-    }
+    </section>`;
+    })()}
   </div>
 </body>
 </html>`;

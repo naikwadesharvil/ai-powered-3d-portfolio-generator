@@ -1,241 +1,549 @@
-import JSZip from 'jszip';
-import type { PortfolioData } from '../types/portfolio';
+import {
+  Document,
+  Paragraph,
+  TextRun,
+  HeadingLevel,
+  AlignmentType,
+  Packer,
+  BorderStyle,
+} from 'docx';
+import type { PortfolioData, ProjectItem, EducationItem } from '../types/portfolio';
+import type { ResumeRenderOptions } from './resumeGenerator';
 
-function escapeXml(unsafe: string | undefined | null): string {
-  if (!unsafe) return '';
-  return unsafe
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
+/**
+ * Group skills by category for clean scannable display
+ */
+function groupSkillsByCategory(skills: Array<{ name: string; category?: string }>): Record<string, string[]> {
+  const groups: Record<string, string[]> = {};
+  for (const s of skills) {
+    if (!s.name?.trim()) continue;
+    const cat = s.category?.trim() || 'Core Competencies';
+    if (!groups[cat]) groups[cat] = [];
+    if (!groups[cat].includes(s.name.trim())) {
+      groups[cat].push(s.name.trim());
+    }
+  }
+  return groups;
 }
 
 /**
- * Build a standard, valid Microsoft Word (.docx) file representing the ATS resume.
+ * Build a standard, valid Microsoft Word (.docx) Document object representing the ATS resume.
  */
-export async function generateDocxBlob(portfolio: PortfolioData): Promise<Blob> {
-  const zip = new JSZip();
+export function buildDocxDocument(
+  portfolio: PortfolioData,
+  options: ResumeRenderOptions = {}
+): Document {
+  const {
+    template = 'modern',
+    accentColor = '#1e3a8a',
+    showSummary = true,
+    showSkills = true,
+    showExperience = true,
+    showEducation = true,
+    showProjects = true,
+    showCertifications = true,
+    showPublications = true,
+  } = options;
 
-  // 1. [Content_Types].xml
-  zip.file(
-    '[Content_Types].xml',
-    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
-  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
-  <Default Extension="xml" ContentType="application/xml"/>
-  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
-  <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
-</Types>`
+  const isClassic = template === 'classic';
+  const isCompact = template === 'compact';
+
+  const fontName = isClassic ? 'Times New Roman' : 'Calibri';
+  const rawAccent = isClassic ? '111827' : (accentColor ? accentColor.replace('#', '') : '1E3A8A');
+  const accentHex = rawAccent.length === 6 ? rawAccent : '1E3A8A';
+
+  // Margins in twips: 10mm = ~567 twips, 15mm = ~850 twips
+  const pageMarginTwips = isCompact ? 567 : 850;
+
+  // Font sizing in half-points (20 half-points = 10pt)
+  const bodySize = isCompact ? 18 : 20;
+  const h1Size = isCompact ? 32 : 38;
+  const h2Size = isCompact ? 22 : 24;
+  const subSize = isCompact ? 18 : 20;
+  const leadSize = isCompact ? 16 : 18;
+
+  const children: Paragraph[] = [];
+
+  // Helper for Section Headings with bottom border and keepNext to prevent orphaned headings
+  const addSectionHeading = (title: string) => {
+    children.push(
+      new Paragraph({
+        heading: HeadingLevel.HEADING_2,
+        keepNext: true,
+        spacing: { before: isCompact ? 140 : 220, after: isCompact ? 40 : 80 },
+        border: {
+          bottom: {
+            color: accentHex,
+            space: 4,
+            style: BorderStyle.SINGLE,
+            size: 6,
+          },
+        },
+        children: [
+          new TextRun({
+            text: title.toUpperCase(),
+            bold: true,
+            size: h2Size,
+            color: accentHex,
+            font: fontName,
+          }),
+        ],
+      })
+    );
+  };
+
+  // 1. Header: Name
+  children.push(
+    new Paragraph({
+      alignment: isClassic ? AlignmentType.CENTER : AlignmentType.LEFT,
+      keepNext: true,
+      spacing: { after: 40 },
+      children: [
+        new TextRun({
+          text: (portfolio.name || 'Candidate').toUpperCase(),
+          bold: true,
+          size: h1Size,
+          color: '0F172A',
+          font: fontName,
+        }),
+      ],
+    })
   );
 
-  // 2. _rels/.rels
-  zip.file(
-    '_rels/.rels',
-    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
-</Relationships>`
-  );
-
-  // 3. word/_rels/document.xml.rels
-  zip.file(
-    'word/_rels/document.xml.rels',
-    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
-</Relationships>`
-  );
-
-  // 4. word/styles.xml
-  zip.file(
-    'word/styles.xml',
-    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-  <w:docDefaults>
-    <w:rPrDefault>
-      <w:rPr>
-        <w:rFonts w:ascii="Calibri" w:hAnsi="Calibri" w:cs="Calibri"/>
-        <w:sz w:val="21"/> <!-- 10.5 pt -->
-        <w:color w:val="222222"/>
-      </w:rPr>
-    </w:rPrDefault>
-  </w:docDefaults>
-</w:styles>`
-  );
-
-  // 5. word/document.xml
-  const paragraphs: string[] = [];
-
-  // Helper functions for Word XML building
-  const p = (text: string, bold = false, size = 21, color = '222222', align = 'left', spaceAfter = 100) => `
-    <w:p>
-      <w:pPr>
-        <w:jc w:val="${align}"/>
-        <w:spacing w:after="${spaceAfter}" w:line="260" w:lineRule="auto"/>
-      </w:pPr>
-      <w:r>
-        <w:rPr>
-          ${bold ? '<w:b/>' : ''}
-          <w:sz w:val="${size}"/>
-          <w:color w:val="${color}"/>
-        </w:rPr>
-        <w:t xml:space="preserve">${escapeXml(text)}</w:t>
-      </w:r>
-    </w:p>`;
-
-  const heading = (title: string) => `
-    <w:p>
-      <w:pPr>
-        <w:spacing w:before="240" w:after="80"/>
-        <w:pBdr>
-          <w:bottom w:val="single" w:sz="6" w:space="4" w:color="1E3A8A"/>
-        </w:pBdr>
-      </w:pPr>
-      <w:r>
-        <w:rPr>
-          <w:b/>
-          <w:sz w:val="24"/>
-          <w:color w:val="1E3A8A"/>
-        </w:rPr>
-        <w:t xml:space="preserve">${escapeXml(title.toUpperCase())}</w:t>
-      </w:r>
-    </w:p>`;
-
-  const bullet = (text: string, boldPrefix = '') => `
-    <w:p>
-      <w:pPr>
-        <w:ind w:left="360" w:hanging="200"/>
-        <w:spacing w:after="60"/>
-      </w:pPr>
-      <w:r>
-        <w:rPr><w:color w:val="475569"/></w:rPr>
-        <w:t xml:space="preserve">• </w:t>
-      </w:r>
-      ${
-        boldPrefix
-          ? `<w:r>
-        <w:rPr><w:b/><w:color w:val="0F172A"/></w:rPr>
-        <w:t xml:space="preserve">${escapeXml(boldPrefix)}: </w:t>
-      </w:r>`
-          : ''
-      }
-      <w:r>
-        <w:rPr><w:color w:val="334155"/></w:rPr>
-        <w:t xml:space="preserve">${escapeXml(text)}</w:t>
-      </w:r>
-    </w:p>`;
-
-  // Title / Name
-  paragraphs.push(p(portfolio.name, true, 40, '0F172A', 'left', 40));
-
-  // Target Role
+  // 2. Header: Target Role
   const roleText = portfolio.targetRole || portfolio.tagline || portfolio.role;
-  paragraphs.push(p(roleText, true, 23, '1E3A8A', 'left', 60));
-
-  // Contact Info
-  const contacts: string[] = [];
-  if (portfolio.email) contacts.push(portfolio.email);
-  if (portfolio.phone) contacts.push(portfolio.phone);
-  if (portfolio.location) contacts.push(portfolio.location);
-  if (portfolio.linkedin) contacts.push(portfolio.linkedin.replace(/^https?:\/\//, ''));
-  if (portfolio.github) contacts.push(portfolio.github.replace(/^https?:\/\//, ''));
-  paragraphs.push(p(contacts.join(' | '), false, 19, '64748B', 'left', 200));
-
-  // Summary
-  if (portfolio.fullBio || portfolio.shortBio) {
-    paragraphs.push(heading('Professional Summary'));
-    paragraphs.push(p(portfolio.fullBio || portfolio.shortBio, false, 20, '334155', 'left', 120));
+  if (roleText?.trim()) {
+    children.push(
+      new Paragraph({
+        alignment: isClassic ? AlignmentType.CENTER : AlignmentType.LEFT,
+        keepNext: true,
+        spacing: { after: 60 },
+        children: [
+          new TextRun({
+            text: roleText.toUpperCase(),
+            bold: true,
+            size: subSize,
+            color: accentHex,
+            font: fontName,
+          }),
+        ],
+      })
+    );
   }
 
-  // Skills
-  if (portfolio.skills && portfolio.skills.length > 0) {
-    paragraphs.push(heading('Technical Competencies'));
-    const grouped: Record<string, string[]> = {};
-    for (const s of portfolio.skills) {
-      const cat = s.category || 'Core';
-      if (!grouped[cat]) grouped[cat] = [];
-      if (!grouped[cat].includes(s.name)) grouped[cat].push(s.name);
-    }
-    for (const [cat, skills] of Object.entries(grouped)) {
-      paragraphs.push(bullet(skills.join(', '), cat));
+  // 3. Header: Contact Details
+  const contactParts: string[] = [];
+  if (portfolio.email?.trim()) contactParts.push(portfolio.email.trim());
+  if (portfolio.phone?.trim()) contactParts.push(portfolio.phone.trim());
+  if (portfolio.location?.trim()) contactParts.push(portfolio.location.trim());
+  if (portfolio.linkedin?.trim()) {
+    contactParts.push(portfolio.linkedin.trim().replace(/^https?:\/\/(www\.)?/, ''));
+  }
+  if (portfolio.github?.trim()) {
+    contactParts.push(portfolio.github.trim().replace(/^https?:\/\/(www\.)?/, ''));
+  }
+
+  if (contactParts.length > 0) {
+    children.push(
+      new Paragraph({
+        alignment: isClassic ? AlignmentType.CENTER : AlignmentType.LEFT,
+        keepNext: true,
+        spacing: { after: isCompact ? 100 : 160 },
+        border: isClassic
+          ? {
+              bottom: {
+                color: '111827',
+                space: 4,
+                style: BorderStyle.SINGLE,
+                size: 6,
+              },
+            }
+          : undefined,
+        children: [
+          new TextRun({
+            text: contactParts.join('  •  '),
+            size: leadSize,
+            color: '475569',
+            font: fontName,
+          }),
+        ],
+      })
+    );
+  }
+
+  // 4. Professional Summary (Omitted if empty)
+  const summaryText = portfolio.fullBio?.trim() || portfolio.shortBio?.trim();
+  if (showSummary && summaryText) {
+    addSectionHeading('Professional Summary');
+    children.push(
+      new Paragraph({
+        keepLines: true,
+        spacing: { after: isCompact ? 80 : 120, line: 240 },
+        children: [
+          new TextRun({
+            text: summaryText,
+            size: bodySize,
+            color: '1F2937',
+            font: fontName,
+          }),
+        ],
+      })
+    );
+  }
+
+  // 5. Technical Competencies (Omitted if empty)
+  const skillGroups = groupSkillsByCategory(portfolio.skills || []);
+  if (showSkills && Object.keys(skillGroups).length > 0) {
+    addSectionHeading('Technical Competencies');
+    for (const [cat, skills] of Object.entries(skillGroups)) {
+      children.push(
+        new Paragraph({
+          bullet: { level: 0 },
+          keepLines: true,
+          spacing: { after: isCompact ? 30 : 50 },
+          children: [
+            new TextRun({
+              text: `${cat}: `,
+              bold: true,
+              size: bodySize,
+              color: '0F172A',
+              font: fontName,
+            }),
+            new TextRun({
+              text: skills.join(', '),
+              size: bodySize,
+              color: '374151',
+              font: fontName,
+            }),
+          ],
+        })
+      );
     }
   }
 
-  // Experience
-  const expList = portfolio.experiences || (portfolio as any).experience || [];
-  if (expList.length > 0) {
-    paragraphs.push(heading('Professional Experience & Training'));
+  // 6. Professional Experience (Omitted if empty)
+  const expList = (portfolio.experiences || (portfolio as any).experience || []).filter(
+    (e: any) => (e.role && e.role.trim()) || (e.company && e.company.trim()) || (e.title && e.title.trim())
+  );
+  if (showExperience && expList.length > 0) {
+    addSectionHeading('Professional Experience');
     for (const exp of expList) {
-      const expRole = exp.role || (exp as any).title || 'Role';
-      paragraphs.push(p(`${expRole} — ${exp.company} (${exp.period})`, true, 21, '0F172A', 'left', 40));
-      if (exp.description) {
-        paragraphs.push(p(exp.description, false, 20, '475569', 'left', 40));
+      const expRole = exp.role?.trim() || (exp as any).title?.trim() || 'Role';
+      const company = exp.company?.trim() ? ` — ${exp.company.trim()}` : '';
+      const period = exp.period?.trim() ? ` (${exp.period.trim()})` : '';
+
+      children.push(
+        new Paragraph({
+          keepNext: true,
+          keepLines: true,
+          spacing: { before: isCompact ? 60 : 100, after: 30 },
+          children: [
+            new TextRun({
+              text: expRole,
+              bold: true,
+              size: subSize,
+              color: '0F172A',
+              font: fontName,
+            }),
+            new TextRun({
+              text: `${company}${period}`,
+              italics: true,
+              size: bodySize,
+              color: '334155',
+              font: fontName,
+            }),
+          ],
+        })
+      );
+
+      if (exp.description?.trim()) {
+        children.push(
+          new Paragraph({
+            keepLines: true,
+            spacing: { after: 40 },
+            children: [
+              new TextRun({
+                text: exp.description.trim(),
+                size: bodySize,
+                color: '475569',
+                font: fontName,
+              }),
+            ],
+          })
+        );
       }
-      const expBullets = (exp.highlights && exp.highlights.length > 0 ? exp.highlights : exp.points) || [];
+
+      const expBullets = (
+        (exp.highlights && exp.highlights.length > 0 ? exp.highlights : exp.points) || []
+      ).filter((h: string) => h && h.trim());
+
       for (const h of expBullets) {
-        paragraphs.push(bullet(h));
+        children.push(
+          new Paragraph({
+            bullet: { level: 0 },
+            keepLines: true,
+            spacing: { after: isCompact ? 25 : 45 },
+            children: [
+              new TextRun({
+                text: h.trim(),
+                size: bodySize,
+                color: '1F2937',
+                font: fontName,
+              }),
+            ],
+          })
+        );
       }
     }
   }
 
-  // Education
-  if (portfolio.education && portfolio.education.length > 0) {
-    paragraphs.push(heading('Education'));
-    for (const edu of portfolio.education) {
-      paragraphs.push(p(`${edu.degree} — ${edu.institution} (${edu.period})${edu.score ? ` [${edu.score}]` : ''}`, true, 21, '0F172A', 'left', 40));
+  // 7. Education (Omitted if empty)
+  const eduList = (portfolio.education || []).filter(
+    (e: EducationItem) => (e.degree && e.degree.trim()) || (e.institution && e.institution.trim())
+  );
+  if (showEducation && eduList.length > 0) {
+    addSectionHeading('Education');
+    for (const edu of eduList) {
+      const degree = edu.degree?.trim() || 'Degree';
+      const inst = edu.institution?.trim() ? ` — ${edu.institution.trim()}` : '';
+      const period = edu.period?.trim() ? ` (${edu.period.trim()})` : '';
+      const score = edu.score?.trim() ? ` [Score: ${edu.score.trim()}]` : '';
+
+      children.push(
+        new Paragraph({
+          keepNext: true,
+          keepLines: true,
+          spacing: { before: isCompact ? 40 : 70, after: 30 },
+          children: [
+            new TextRun({
+              text: degree,
+              bold: true,
+              size: subSize,
+              color: '0F172A',
+              font: fontName,
+            }),
+            new TextRun({
+              text: `${inst}${period}${score}`,
+              size: bodySize,
+              color: '334155',
+              font: fontName,
+            }),
+          ],
+        })
+      );
     }
   }
 
-  // Projects
-  if (portfolio.projects && portfolio.projects.length > 0) {
-    paragraphs.push(heading('Technical Projects'));
-    for (const proj of portfolio.projects) {
-      paragraphs.push(p(`${proj.title}${proj.role ? ` (${proj.role})` : ''}${proj.date ? ` — ${proj.date}` : ''}`, true, 21, '0F172A', 'left', 40));
-      paragraphs.push(bullet(proj.description || ''));
-      if (proj.metrics) {
-        paragraphs.push(bullet(proj.metrics, 'Outcome / Metric'));
+  // 8. Technical Projects (Omitted if empty)
+  const projList = (portfolio.projects || []).filter(
+    (p: ProjectItem) => p.title && p.title.trim()
+  );
+  if (showProjects && projList.length > 0) {
+    addSectionHeading('Technical Projects');
+    for (const proj of projList) {
+      const pTitle = proj.title.trim();
+      const pRole = proj.role?.trim() ? ` (${proj.role.trim()})` : '';
+      const pDate = proj.date?.trim() ? ` — ${proj.date.trim()}` : '';
+
+      children.push(
+        new Paragraph({
+          keepNext: true,
+          keepLines: true,
+          spacing: { before: isCompact ? 60 : 90, after: 30 },
+          children: [
+            new TextRun({
+              text: pTitle,
+              bold: true,
+              size: subSize,
+              color: '0F172A',
+              font: fontName,
+            }),
+            new TextRun({
+              text: `${pRole}${pDate}`,
+              italics: true,
+              size: bodySize,
+              color: '475569',
+              font: fontName,
+            }),
+          ],
+        })
+      );
+
+      if (proj.description?.trim()) {
+        children.push(
+          new Paragraph({
+            bullet: { level: 0 },
+            keepLines: true,
+            spacing: { after: isCompact ? 25 : 40 },
+            children: [
+              new TextRun({
+                text: proj.description.trim(),
+                size: bodySize,
+                color: '1F2937',
+                font: fontName,
+              }),
+            ],
+          })
+        );
       }
+
+      if (proj.metrics?.trim()) {
+        children.push(
+          new Paragraph({
+            bullet: { level: 0 },
+            keepLines: true,
+            spacing: { after: isCompact ? 25 : 40 },
+            children: [
+              new TextRun({
+                text: 'Key Metric / Outcome: ',
+                bold: true,
+                size: bodySize,
+                color: '0F172A',
+                font: fontName,
+              }),
+              new TextRun({
+                text: proj.metrics.trim(),
+                size: bodySize,
+                color: '1F2937',
+                font: fontName,
+              }),
+            ],
+          })
+        );
+      }
+
       if (proj.tags && proj.tags.length > 0) {
-        paragraphs.push(bullet(proj.tags.join(', '), 'Technologies'));
+        children.push(
+          new Paragraph({
+            bullet: { level: 0 },
+            keepLines: true,
+            spacing: { after: isCompact ? 25 : 40 },
+            children: [
+              new TextRun({
+                text: 'Technologies: ',
+                bold: true,
+                size: bodySize,
+                color: '0F172A',
+                font: fontName,
+              }),
+              new TextRun({
+                text: proj.tags.join(', '),
+                size: bodySize,
+                color: '374151',
+                font: fontName,
+              }),
+            ],
+          })
+        );
       }
     }
   }
 
-  // Certifications
-  if (portfolio.certifications && portfolio.certifications.length > 0) {
-    paragraphs.push(heading('Certifications & Credentials'));
-    for (const c of portfolio.certifications) {
-      const datePart = c.date ? ` (${c.date})` : '';
-      paragraphs.push(bullet(`${c.name} — ${c.issuer}${datePart}`));
+  // 9. Certifications (Omitted if empty)
+  const certList = (portfolio.certifications || []).filter((c) => c.name && c.name.trim());
+  if (showCertifications && certList.length > 0) {
+    addSectionHeading('Certifications & Credentials');
+    for (const c of certList) {
+      const issuer = c.issuer?.trim() ? ` — ${c.issuer.trim()}` : '';
+      const datePart = c.date?.trim() ? ` (${c.date.trim()})` : '';
+
+      children.push(
+        new Paragraph({
+          bullet: { level: 0 },
+          keepLines: true,
+          spacing: { after: isCompact ? 25 : 45 },
+          children: [
+            new TextRun({
+              text: c.name.trim(),
+              bold: true,
+              size: bodySize,
+              color: '0F172A',
+              font: fontName,
+            }),
+            new TextRun({
+              text: `${issuer}${datePart}`,
+              size: bodySize,
+              color: '374151',
+              font: fontName,
+            }),
+          ],
+        })
+      );
     }
   }
 
-  // Publications
-  if (portfolio.publications && portfolio.publications.length > 0) {
-    paragraphs.push(heading('Publications & Research'));
-    for (const pb of portfolio.publications) {
-      const datePart = pb.date ? ` (${pb.date})` : '';
-      const awardPart = pb.award ? ` [${pb.award}]` : '';
-      paragraphs.push(bullet(`"${pb.title}" — ${pb.publisher}${datePart}${awardPart}`));
+  // 10. Publications (Omitted if empty)
+  const pubList = (portfolio.publications || []).filter((pb) => pb.title && pb.title.trim());
+  if (showPublications && pubList.length > 0) {
+    addSectionHeading('Publications & Research');
+    for (const pb of pubList) {
+      const pubName = pb.publisher?.trim() ? ` — ${pb.publisher.trim()}` : '';
+      const datePart = pb.date?.trim() ? ` (${pb.date.trim()})` : '';
+      const awardPart = pb.award?.trim() ? ` [${pb.award.trim()}]` : '';
+
+      children.push(
+        new Paragraph({
+          bullet: { level: 0 },
+          keepLines: true,
+          spacing: { after: isCompact ? 25 : 45 },
+          children: [
+            new TextRun({
+              text: `"${pb.title.trim()}"`,
+              bold: true,
+              size: bodySize,
+              color: '0F172A',
+              font: fontName,
+            }),
+            new TextRun({
+              text: `${pubName}${datePart}${awardPart}`,
+              italics: true,
+              size: bodySize,
+              color: '374151',
+              font: fontName,
+            }),
+          ],
+        })
+      );
     }
   }
 
-  const documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-  <w:body>
-    ${paragraphs.join('\n')}
-    <w:sectPr>
-      <w:pgSz w:w="11906" w:h="16838"/> <!-- A4: 210mm x 297mm in twips -->
-      <w:pgMar w:top="850" w:right="850" w:bottom="850" w:left="850"/> <!-- ~15mm margins -->
-    </w:sectPr>
-  </w:body>
-</w:document>`;
-
-  zip.file('word/document.xml', documentXml);
-
-  return zip.generateAsync({
-    type: 'blob',
-    mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  return new Document({
+    sections: [
+      {
+        properties: {
+          page: {
+            margin: {
+              top: pageMarginTwips,
+              bottom: pageMarginTwips,
+              left: pageMarginTwips,
+              right: pageMarginTwips,
+            },
+          },
+        },
+        children,
+      },
+    ],
   });
+}
+
+/**
+ * Generate a Blob for browser downloads using the docx library.
+ */
+export async function generateDocxBlob(
+  portfolio: PortfolioData,
+  options: ResumeRenderOptions = {}
+): Promise<Blob> {
+  const doc = buildDocxDocument(portfolio, options);
+  return Packer.toBlob(doc);
+}
+
+/**
+ * Generate a Buffer for server environments or testing using the docx library.
+ */
+export async function generateDocxBuffer(
+  portfolio: PortfolioData,
+  options: ResumeRenderOptions = {}
+): Promise<Buffer> {
+  const doc = buildDocxDocument(portfolio, options);
+  return Packer.toBuffer(doc);
 }
