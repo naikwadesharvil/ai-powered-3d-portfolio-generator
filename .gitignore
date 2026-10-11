@@ -34,6 +34,7 @@ server/.env.*
 # Scratch, Testing Artifacts & Screenshots
 scratch/
 screenshots/
+qa_artifacts/
 *.png.tmp
 test_output_*.png
 test_output_*.pdf

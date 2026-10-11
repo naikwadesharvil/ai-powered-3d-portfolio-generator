@@ -39,7 +39,9 @@ export function App() {
   }, [themeTokens]);
 
   const handleUpdatePortfolio = (updated: PortfolioData) => {
-    setPortfolio(normalizePortfolioData(updated));
+    if (updated !== portfolio) {
+      setPortfolio(normalizePortfolioData(updated));
+    }
   };
 
   const handleSwitchRolePreset = (role: UserRole) => {

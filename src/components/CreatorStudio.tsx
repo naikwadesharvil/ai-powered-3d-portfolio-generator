@@ -39,6 +39,7 @@ import type {
 } from '../types/portfolio';
 import type { Persona } from '../types/portfolioSchema';
 import { AiApiClient, type ServerHealth } from '../services/aiApiClient.ts';
+import { AiEngine } from '../services/aiEngine.ts';
 import {
   getDisciplineConfig,
   type DisciplineConfig,
@@ -81,19 +82,15 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
   const [history, setHistory] = useState<PortfolioData[]>([portfolio]);
   const [future, setFuture] = useState<PortfolioData[]>([]);
 
-  // Synchronize Zustand portfolioStore with CreatorStudio
+  // Synchronize Zustand portfolioStore when CreatorStudio opens with an external profile
   useEffect(() => {
     if (isOpen && portfolio) {
-      usePortfolioStore.getState().setPortfolio(portfolio, true);
+      const current = usePortfolioStore.getState().portfolio;
+      if (!current || current.name !== portfolio.name || current.role !== portfolio.role) {
+        usePortfolioStore.getState().setPortfolio(portfolio, true);
+      }
     }
   }, [isOpen]);
-
-  useEffect(() => {
-    const unsub = usePortfolioStore.subscribe((state) => {
-      onUpdatePortfolio(state.portfolio);
-    });
-    return () => unsub();
-  }, [onUpdatePortfolio]);
 
   // Step 4 Resume Template Picker, Live Preview & Page Count State
   const [step4ResumeTemplate, setStep4ResumeTemplate] = useState<ResumeTemplateId>('modern');
@@ -309,8 +306,41 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
   };
 
   // Run AI Generation (Autopilot)
-  const handleRunAutopilot = async (e?: React.FormEvent) => {
+  const handleRunAutopilot = async (e?: React.FormEvent, forceOffline: boolean = false) => {
     if (e) e.preventDefault();
+
+    if (forceOffline) {
+      setIsGenerating(true);
+      setGenerationError(null);
+      const fallbackPortfolio = AiEngine.generatePortfolioFromAutopilot({
+        name: autopilotName || 'Alex Chen',
+        branch: selectedBranch as EducationBranch,
+        customBranchName: selectedBranch === 'other' ? customBranchName : undefined,
+        interests: autopilotInterests || activeDiscipline.defaultInterests.join(', '),
+        role: autopilotRole,
+        skills: skillsList,
+        projects: projectsList,
+        education: educationList,
+        experiences: experienceList,
+      });
+      setHistory((prev) => [...prev, fallbackPortfolio]);
+      setFuture([]);
+      onUpdatePortfolio(fallbackPortfolio);
+      setSkillsList(fallbackPortfolio.skills);
+      setProjectsList(fallbackPortfolio.projects);
+      setEducationList(fallbackPortfolio.education);
+      setExperienceList(fallbackPortfolio.experiences);
+      setGenerationMeta({
+        liveAi: false,
+        source: 'fallback',
+        model: 'offline_heuristic_v1',
+        message: 'Generated with the offline engine; connect AI for richer results',
+        suggestions: ['Connect OpenAI backend for dynamic model synthesis.'],
+      });
+      setGenerationError(null);
+      setIsGenerating(false);
+      return;
+    }
 
     // Client-side form validation
     const errors: Record<string, string> = {};
@@ -2026,15 +2056,37 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
                   <div style={{ flex: 1 }}>
                     <div style={{ fontWeight: 700, marginBottom: '2px' }}>Generation Failure</div>
                     <div>{generationError}</div>
+                    <div style={{ marginTop: '6px', fontSize: '0.8rem', color: '#ffcc00', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Sparkles size={14} />
+                      <span>Generated with the offline engine; connect AI for richer results</span>
+                    </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => handleRunAutopilot()}
-                    className="btn-primary"
-                    style={{ padding: '6px 14px', fontSize: '0.78rem' }}
-                  >
-                    Retry
-                  </button>
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      onClick={() => handleRunAutopilot()}
+                      className="btn-primary"
+                      style={{ padding: '6px 14px', fontSize: '0.78rem' }}
+                    >
+                      Retry
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleRunAutopilot(undefined, true)}
+                      style={{
+                        background: 'rgba(255, 170, 0, 0.15)',
+                        border: '1px solid rgba(255, 170, 0, 0.4)',
+                        color: '#ffcc00',
+                        borderRadius: '6px',
+                        padding: '6px 12px',
+                        fontSize: '0.78rem',
+                        cursor: 'pointer',
+                        fontWeight: 600,
+                      }}
+                    >
+                      Use Offline Engine
+                    </button>
+                  </div>
                 </div>
               )}
 

@@ -114,15 +114,18 @@ export class AiApiClient {
         };
       }
 
-      if (res.status === 400) {
-        const errData = await res.json();
-        const err: any = new Error(errData.message || 'Validation Error');
-        err.fieldErrors = errData.fieldErrors;
-        throw err;
+      if (!res.ok) {
+        if (res.status === 400) {
+          const errData = await res.json().catch(() => ({}));
+          const err: any = new Error(errData.message || 'Validation Error');
+          err.fieldErrors = errData.fieldErrors;
+          throw err;
+        }
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || errData.message || `Server error (${res.status}): AI synthesis service unavailable.`);
       }
     } catch (err: any) {
-      if (err?.fieldErrors) throw err;
-      console.warn('[AI API Client] Backend unreachable, falling back to client engine:', err);
+      throw err;
     }
 
     // Client-side fallback
