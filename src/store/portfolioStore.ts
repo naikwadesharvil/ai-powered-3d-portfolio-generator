@@ -9,7 +9,56 @@ import {
 const AUTOSAVE_STORAGE_KEY = 'portfolio_builder_customizer_autosave_v2';
 const THEME_STORAGE_KEY = 'portfolio_theme_tokens_v2';
 
+export type AiWritingTone = 'professional' | 'creative' | 'concise' | 'impactful' | 'technical';
+
 let autosaveTimer: any = null;
+
+/**
+ * Strips or downscales oversized base64 strings to safeguard against localStorage quota overflow.
+ */
+function sanitizePortfolioForStorage(data: PortfolioData): PortfolioData {
+  try {
+    const clone = JSON.parse(JSON.stringify(data));
+    if (typeof clone.avatar === 'string' && clone.avatar.startsWith('data:') && clone.avatar.length > 50000) {
+      clone.avatar = '';
+    }
+    if (Array.isArray(clone.projects)) {
+      clone.projects.forEach((p: any) => {
+        if (typeof p.imageUrl === 'string' && p.imageUrl.startsWith('data:') && p.imageUrl.length > 50000) {
+          p.imageUrl = '';
+        }
+      });
+    }
+    return clone;
+  } catch {
+    return data;
+  }
+}
+
+/**
+ * Safely writes to localStorage with try/catch guarding for QuotaExceededError.
+ */
+function safeSetLocalStorage(key: string, value: string): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    localStorage.setItem(key, value);
+    return true;
+  } catch (err: any) {
+    if (err && (err.name === 'QuotaExceededError' || err.code === 22 || err.name === 'NS_ERROR_DOM_QUOTA_REACHED')) {
+      console.warn(`[portfolioStore] LocalStorage quota exceeded writing ${key}. Clearing secondary drafts to recover space.`);
+      try {
+        localStorage.removeItem('ai_portfolio_draft');
+        localStorage.setItem(key, value);
+        return true;
+      } catch (retryErr) {
+        console.warn('[portfolioStore] Recovery attempt failed, quota full:', retryErr);
+      }
+    } else {
+      console.warn(`[portfolioStore] LocalStorage write error for ${key}:`, err);
+    }
+    return false;
+  }
+}
 
 function getInitialPortfolio(): PortfolioData {
   if (typeof window !== 'undefined') {
@@ -46,11 +95,14 @@ export interface PortfolioStoreState {
   themeTokens: ThemeTokens;
   history: PortfolioData[];
   future: PortfolioData[];
+  activeTone: AiWritingTone;
   autosaveStatus: 'idle' | 'saving' | 'saved';
   lastAutosavedAt: string | null;
 
   // Actions
   setPortfolio: (portfolio: PortfolioData, skipHistory?: boolean) => void;
+  setActiveTone: (tone: AiWritingTone) => void;
+  resetPortfolio: () => void;
   updateSectionVisibility: (sectionId: string, visible: boolean) => void;
   reorderSections: (newOrder: string[]) => void;
   updateSectionField: (field: keyof PortfolioData, value: any) => void;
@@ -69,8 +121,34 @@ export const usePortfolioStore = create<PortfolioStoreState>((set, get) => ({
   themeTokens: getInitialTheme(),
   history: [],
   future: [],
+  activeTone: 'professional',
   autosaveStatus: 'idle',
   lastAutosavedAt: null,
+
+  setActiveTone: (tone: AiWritingTone) => {
+    set({ activeTone: tone });
+  },
+
+  resetPortfolio: () => {
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.removeItem(AUTOSAVE_STORAGE_KEY);
+        localStorage.removeItem('ai_portfolio_draft');
+        localStorage.removeItem(THEME_STORAGE_KEY);
+      } catch (e) {
+        console.warn('[portfolioStore] Clear localStorage failed:', e);
+      }
+    }
+    set({
+      portfolio: ROLE_PROFILES.student,
+      themeTokens: CURATED_THEME_PRESETS[0],
+      history: [],
+      future: [],
+      autosaveStatus: 'idle',
+      lastAutosavedAt: null,
+      activeTone: 'professional',
+    });
+  },
 
   setPortfolio: (newPortfolio: PortfolioData, skipHistory = false) => {
     const current = get().portfolio;
@@ -81,18 +159,21 @@ export const usePortfolioStore = create<PortfolioStoreState>((set, get) => ({
       autosaveStatus: 'saving',
     }));
 
-    // Trigger debounced autosave (400ms)
+    // Trigger debounced autosave (400ms) with sanitized payload and safe localStorage quota handling
     if (autosaveTimer) clearTimeout(autosaveTimer);
     autosaveTimer = setTimeout(() => {
-      if (typeof window !== 'undefined') {
-        try {
-          const serialized = JSON.stringify(newPortfolio);
-          localStorage.setItem(AUTOSAVE_STORAGE_KEY, serialized);
-          localStorage.setItem('ai_portfolio_draft', serialized);
+      try {
+        const sanitized = sanitizePortfolioForStorage(newPortfolio);
+        const serialized = JSON.stringify(sanitized);
+        const savedPrimary = safeSetLocalStorage(AUTOSAVE_STORAGE_KEY, serialized);
+        safeSetLocalStorage('ai_portfolio_draft', serialized);
+        if (savedPrimary) {
           set({ autosaveStatus: 'saved', lastAutosavedAt: new Date().toLocaleTimeString() });
-        } catch {
+        } else {
           set({ autosaveStatus: 'idle' });
         }
+      } catch {
+        set({ autosaveStatus: 'idle' });
       }
     }, 400);
   },
@@ -151,26 +232,14 @@ export const usePortfolioStore = create<PortfolioStoreState>((set, get) => ({
   setThemeTokens: (partial: Partial<ThemeTokens>) => {
     const updated = { ...get().themeTokens, ...partial };
     set({ themeTokens: updated });
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem(THEME_STORAGE_KEY, JSON.stringify(updated));
-      } catch {
-        // Fallback
-      }
-    }
+    safeSetLocalStorage(THEME_STORAGE_KEY, JSON.stringify(updated));
   },
 
   applyThemePreset: (presetId: string) => {
     const found = CURATED_THEME_PRESETS.find((p) => p.id === presetId);
     if (found) {
       set({ themeTokens: found });
-      if (typeof window !== 'undefined') {
-        try {
-          localStorage.setItem(THEME_STORAGE_KEY, JSON.stringify(found));
-        } catch {
-          // Fallback
-        }
-      }
+      safeSetLocalStorage(THEME_STORAGE_KEY, JSON.stringify(found));
     }
   },
 
@@ -185,10 +254,9 @@ export const usePortfolioStore = create<PortfolioStoreState>((set, get) => ({
       future: [portfolio, ...future],
       autosaveStatus: 'saving',
     });
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(AUTOSAVE_STORAGE_KEY, JSON.stringify(previous));
-      set({ autosaveStatus: 'saved', lastAutosavedAt: new Date().toLocaleTimeString() });
-    }
+    const sanitized = sanitizePortfolioForStorage(previous);
+    safeSetLocalStorage(AUTOSAVE_STORAGE_KEY, JSON.stringify(sanitized));
+    set({ autosaveStatus: 'saved', lastAutosavedAt: new Date().toLocaleTimeString() });
   },
 
   redo: () => {
@@ -202,10 +270,9 @@ export const usePortfolioStore = create<PortfolioStoreState>((set, get) => ({
       future: newFuture,
       autosaveStatus: 'saving',
     });
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(AUTOSAVE_STORAGE_KEY, JSON.stringify(next));
-      set({ autosaveStatus: 'saved', lastAutosavedAt: new Date().toLocaleTimeString() });
-    }
+    const sanitized = sanitizePortfolioForStorage(next);
+    safeSetLocalStorage(AUTOSAVE_STORAGE_KEY, JSON.stringify(sanitized));
+    set({ autosaveStatus: 'saved', lastAutosavedAt: new Date().toLocaleTimeString() });
   },
 
   canUndo: () => get().history.length > 0,

@@ -23,11 +23,19 @@ import {
   Loader2,
   ArrowRight,
   ArrowLeft,
+  RotateCcw,
+  Sparkles,
+  Send,
+  ChevronDown,
+  ChevronUp,
+  MessageSquare,
 } from 'lucide-react';
-import { usePortfolioStore } from '../store/portfolioStore';
+import { usePortfolioStore, type AiWritingTone } from '../store/portfolioStore';
 import { SectionSortableItem } from './SectionSortableItem';
 import { ThemeCustomizer } from './ThemeCustomizer';
 import { LivePortfolioPreview } from './LivePortfolioPreview';
+import { AiApiClient } from '../services/aiApiClient';
+import type { PortfolioData } from '../types/portfolio';
 
 const SECTION_LABELS: Record<string, string> = {
   hero: 'Hero & 3D Telemetry',
@@ -60,10 +68,33 @@ export const SplitCustomizer: React.FC<SplitCustomizerProps> = ({
     canRedo,
     autosaveStatus,
     lastAutosavedAt,
+    activeTone,
+    setActiveTone,
+    resetPortfolio,
+    setPortfolio,
   } = usePortfolioStore();
 
   const [activeEditorTab, setActiveEditorTab] = useState<'sections' | 'themes'>('sections');
   const [mobileActiveTab, setMobileActiveTab] = useState<'editor' | 'preview'>('editor');
+
+  // AI Co-Pilot Assistant State (Restored from Step 3)
+  const [isAiAssistantOpen, setIsAiAssistantOpen] = useState(false);
+  const [chatInput, setChatInput] = useState('');
+  const [isChatting, setIsChatting] = useState(false);
+  const [chatMessages, setChatMessages] = useState<
+    Array<{ sender: 'user' | 'assistant'; text: string; timestamp: string; liveAi?: boolean }>
+  >([
+    {
+      sender: 'assistant',
+      text: `Hello! I'm your AI Portfolio Co-Pilot. I can help rewrite sections in your chosen tone (${activeTone}), refine capstone metrics, adjust section priorities, or optimize your presentation.`,
+      timestamp: 'Now',
+    },
+  ]);
+  const [pendingChatProfile, setPendingChatProfile] = useState<{
+    profile: PortfolioData;
+    explanation: string;
+    summary: string;
+  } | null>(null);
 
   // Sensors for @dnd-kit
   const sensors = useSensors(
@@ -106,6 +137,83 @@ export const SplitCustomizer: React.FC<SplitCustomizerProps> = ({
         reorderSections(newOrder);
       }
     }
+  };
+
+  // Co-Pilot Chat Handlers
+  const handleSendChatMessage = async (e?: React.FormEvent, customPrompt?: string) => {
+    if (e) e.preventDefault();
+    const promptToSend = customPrompt || chatInput;
+    if (!promptToSend.trim()) return;
+
+    const userText = promptToSend.trim();
+    setChatInput('');
+    setChatMessages((prev) => [
+      ...prev,
+      { sender: 'user', text: userText, timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) },
+    ]);
+    setIsChatting(true);
+
+    try {
+      const historyPayload = chatMessages.slice(-8).map((m) => ({
+        role: (m.sender === 'user' ? 'user' : 'assistant') as 'user' | 'assistant',
+        content: m.text,
+      }));
+
+      const res = await AiApiClient.chat({
+        instruction: userText,
+        currentProfile: portfolio,
+        messageHistory: historyPayload,
+      });
+
+      setChatMessages((prev) => [
+        ...prev,
+        {
+          sender: 'assistant',
+          text: res.explanation,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          liveAi: res.liveAi,
+        },
+      ]);
+
+      if (res.suggestedFollowUp) {
+        setChatMessages((prev) => [
+          ...prev,
+          {
+            sender: 'assistant',
+            text: `💡 Follow-up: ${res.suggestedFollowUp}`,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            liveAi: res.liveAi,
+          },
+        ]);
+      }
+
+      setPendingChatProfile({
+        profile: res.updatedProfile,
+        explanation: res.explanation,
+        summary: res.changesSummary,
+      });
+    } catch (err: any) {
+      setChatMessages((prev) => [
+        ...prev,
+        {
+          sender: 'assistant',
+          text: `Error processing request: ${err?.message || 'Could not reach AI co-pilot'}`,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        },
+      ]);
+    } finally {
+      setIsChatting(false);
+    }
+  };
+
+  const handleAcceptChatProposal = () => {
+    if (!pendingChatProfile) return;
+    setPortfolio(pendingChatProfile.profile);
+    setPendingChatProfile(null);
+  };
+
+  const handleDiscardChatProposal = () => {
+    setPendingChatProfile(null);
   };
 
   return (
@@ -239,6 +347,33 @@ export const SplitCustomizer: React.FC<SplitCustomizerProps> = ({
               <span>Autosave active</span>
             )}
           </div>
+
+          {/* Clear saved data / Start over */}
+          <button
+            type="button"
+            onClick={() => {
+              if (window.confirm('Are you sure you want to clear saved customization data and start over? This will restore the initial template.')) {
+                resetPortfolio();
+              }
+            }}
+            style={{
+              background: 'rgba(255, 0, 85, 0.08)',
+              border: '1px solid rgba(255, 0, 85, 0.25)',
+              color: '#ff4466',
+              padding: '6px 10px',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '5px',
+              fontSize: '0.72rem',
+              fontFamily: 'var(--font-mono)',
+            }}
+            title="Clear saved data and reset to default"
+          >
+            <RotateCcw size={12} />
+            <span>Reset Data</span>
+          </button>
         </div>
 
         {/* Editor Sub-Tab Toggle */}
@@ -322,6 +457,251 @@ export const SplitCustomizer: React.FC<SplitCustomizerProps> = ({
                 <p style={{ margin: '4px 0 0', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
                   Drag items by their handle to reorder. Toggle eye to show/hide. Click arrows to edit inline or rewrite with AI.
                 </p>
+              </div>
+
+              {/* Tone Selector for AI Polish */}
+              <div
+                style={{
+                  padding: '10px 14px',
+                  borderRadius: '8px',
+                  background: 'rgba(255, 255, 255, 0.03)',
+                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '12px',
+                  marginBottom: '12px',
+                  flexWrap: 'wrap',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Sparkles size={15} color="var(--accent-cyan)" />
+                  <span style={{ fontSize: '0.78rem', color: '#fff', fontWeight: 600 }}>
+                    AI Writing Tone:
+                  </span>
+                </div>
+                <select
+                  value={activeTone}
+                  onChange={(e) => setActiveTone(e.target.value as AiWritingTone)}
+                  style={{
+                    padding: '5px 10px',
+                    background: '#04070d',
+                    border: '1px solid rgba(0, 242, 254, 0.3)',
+                    borderRadius: '6px',
+                    color: 'var(--accent-cyan)',
+                    fontSize: '0.76rem',
+                    fontFamily: 'var(--font-mono)',
+                    outline: 'none',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <option value="professional">Professional (Executive & Authoritative)</option>
+                  <option value="impactful">Impactful (Outcome & Benchmark-Driven)</option>
+                  <option value="concise">Concise (Crisp & Zero Fluff)</option>
+                  <option value="technical">Technical (Engineering Architecture)</option>
+                  <option value="creative">Creative (Evocative & Distinctive)</option>
+                </select>
+              </div>
+
+              {/* Collapsed "AI Assistant" Panel (Chat & Mutation Diff) */}
+              <div
+                style={{
+                  borderRadius: '10px',
+                  background: 'rgba(0, 242, 254, 0.03)',
+                  border: isAiAssistantOpen ? '1px solid var(--accent-cyan)' : '1px solid rgba(0, 242, 254, 0.2)',
+                  overflow: 'hidden',
+                  marginBottom: '16px',
+                  transition: 'border 0.2s ease',
+                }}
+              >
+                {/* Collapsible Accordion Header */}
+                <div
+                  onClick={() => setIsAiAssistantOpen(!isAiAssistantOpen)}
+                  style={{
+                    padding: '12px 14px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    cursor: 'pointer',
+                    background: 'rgba(5, 7, 12, 0.5)',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <MessageSquare size={16} color="var(--accent-cyan)" />
+                    <span style={{ fontWeight: 700, fontSize: '0.86rem', color: '#fff' }}>
+                      AI Assistant Co-Pilot
+                    </span>
+                    <span
+                      style={{
+                        fontSize: '0.66rem',
+                        fontFamily: 'var(--font-mono)',
+                        padding: '2px 8px',
+                        borderRadius: '999px',
+                        background: 'rgba(0, 242, 254, 0.12)',
+                        color: 'var(--accent-cyan)',
+                      }}
+                    >
+                      Chat & Co-Pilot
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'rgba(255,255,255,0.6)' }}>
+                    <span style={{ fontSize: '0.72rem', fontFamily: 'var(--font-mono)' }}>
+                      {isAiAssistantOpen ? 'Hide' : 'Open'}
+                    </span>
+                    {isAiAssistantOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                  </div>
+                </div>
+
+                {/* Expanded Co-Pilot Body */}
+                {isAiAssistantOpen && (
+                  <div style={{ padding: '14px', borderTop: '1px solid rgba(255, 255, 255, 0.08)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    {/* Quick Follow-up Chips */}
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                      {[
+                        'Highlight ANSYS & FEA precision',
+                        'Shorten bio for high-impact metrics',
+                        'Prioritize top capstone project',
+                        'Sharpen technical terminology',
+                      ].map((pill, i) => (
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => handleSendChatMessage(undefined, pill)}
+                          style={{
+                            background: 'rgba(255, 255, 255, 0.04)',
+                            border: '1px solid rgba(255, 255, 255, 0.1)',
+                            borderRadius: '999px',
+                            padding: '3px 8px',
+                            color: 'rgba(255, 255, 255, 0.8)',
+                            fontSize: '0.7rem',
+                            fontFamily: 'var(--font-mono)',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          + {pill}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Proposed Mutation Diff Banner */}
+                    {pendingChatProfile && (
+                      <div
+                        style={{
+                          padding: '12px 14px',
+                          borderRadius: '8px',
+                          background: 'rgba(0, 242, 254, 0.1)',
+                          border: '1px solid var(--accent-cyan)',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '8px',
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <div style={{ fontWeight: 700, color: '#fff', fontSize: '0.82rem' }}>
+                            Proposed: {pendingChatProfile.summary}
+                          </div>
+                          <div style={{ display: 'flex', gap: '6px' }}>
+                            <button
+                              type="button"
+                              onClick={handleAcceptChatProposal}
+                              className="btn-primary"
+                              style={{ padding: '4px 10px', fontSize: '0.72rem' }}
+                            >
+                              <Check size={12} />
+                              <span>Apply to Store</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleDiscardChatProposal}
+                              style={{
+                                background: 'transparent',
+                                border: '1px solid rgba(255,255,255,0.2)',
+                                color: '#fff',
+                                borderRadius: '4px',
+                                padding: '4px 8px',
+                                fontSize: '0.72rem',
+                                cursor: 'pointer',
+                              }}
+                            >
+                              Discard
+                            </button>
+                          </div>
+                        </div>
+                        <div style={{ fontSize: '0.76rem', color: 'rgba(255, 255, 255, 0.8)' }}>
+                          {pendingChatProfile.explanation}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Chat Messages Log */}
+                    <div
+                      style={{
+                        maxHeight: '220px',
+                        overflowY: 'auto',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '8px',
+                        padding: '10px',
+                        background: 'rgba(3, 5, 8, 0.7)',
+                        borderRadius: '8px',
+                        border: '1px solid rgba(255, 255, 255, 0.06)',
+                      }}
+                    >
+                      {chatMessages.map((msg, idx) => (
+                        <div
+                          key={idx}
+                          style={{
+                            alignSelf: msg.sender === 'user' ? 'flex-end' : 'flex-start',
+                            maxWidth: '90%',
+                            padding: '8px 12px',
+                            borderRadius: '8px',
+                            background: msg.sender === 'user' ? 'rgba(0, 242, 254, 0.15)' : 'rgba(255, 255, 255, 0.04)',
+                            border: msg.sender === 'user' ? '1px solid var(--accent-cyan)' : '1px solid rgba(255, 255, 255, 0.08)',
+                            color: '#fff',
+                            fontSize: '0.78rem',
+                            lineHeight: 1.45,
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', marginBottom: '2px' }}>
+                            <span style={{ fontSize: '0.62rem', fontFamily: 'var(--font-mono)', color: msg.sender === 'user' ? 'var(--accent-cyan)' : 'var(--accent-magenta)' }}>
+                              {msg.sender === 'user' ? 'You' : `AI Co-Pilot ${msg.liveAi ? '(OpenAI)' : '(Offline)'}`}
+                            </span>
+                            <span style={{ fontSize: '0.62rem', color: 'rgba(255,255,255,0.4)' }}>{msg.timestamp}</span>
+                          </div>
+                          <div>{msg.text}</div>
+                        </div>
+                      ))}
+                      {isChatting && (
+                        <div style={{ color: 'var(--accent-cyan)', fontFamily: 'var(--font-mono)', fontSize: '0.74rem' }}>
+                          AI Co-Pilot is processing instructions...
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Chat Input Form */}
+                    <form onSubmit={handleSendChatMessage} style={{ display: 'flex', gap: '8px' }}>
+                      <input
+                        type="text"
+                        placeholder="Instruct AI co-pilot..."
+                        value={chatInput}
+                        onChange={(e) => setChatInput(e.target.value)}
+                        style={{
+                          flex: 1,
+                          padding: '8px 12px',
+                          background: 'rgba(3, 5, 8, 0.9)',
+                          border: '1px solid rgba(255, 255, 255, 0.15)',
+                          borderRadius: '6px',
+                          color: '#fff',
+                          fontSize: '0.82rem',
+                          outline: 'none',
+                        }}
+                      />
+                      <button type="submit" disabled={isChatting} className="btn-primary" style={{ padding: '8px 14px' }}>
+                        <Send size={14} />
+                      </button>
+                    </form>
+                  </div>
+                )}
               </div>
 
               {/* @dnd-kit Drag-to-Reorder Sortable List */}

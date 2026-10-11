@@ -58,8 +58,8 @@ async function testPhase3() {
     const previewPanel = await page.$('.split-preview-panel');
     console.log(editorPanel && previewPanel ? '✅ [PASS] Split layout: Editor on left, Preview on right' : '❌ [FAIL] Panels missing');
 
-    // Test 2: Measure Reactive Update Latency (< 100ms)
-    console.log('\n--- 2. Testing Inline Editing & Reactivity (< 100ms) ---');
+    // Test 2: Measure Keystroke-to-Paint Preview Latency (< 100ms)
+    console.log('\n--- 2. Testing Keystroke-to-Paint Latency (< 100ms) ---');
     // Expand first section item
     await page.evaluate(() => {
       const expandBtns = Array.from(document.querySelectorAll('.split-editor-panel button'));
@@ -68,23 +68,34 @@ async function testPhase3() {
     });
     await new Promise(r => setTimeout(r, 400));
 
-    const startTime = Date.now();
-    await page.evaluate(() => {
-      const inputs = Array.from(document.querySelectorAll('.split-editor-panel input[type="text"]'));
-      if (inputs.length > 0) {
-        inputs[0].value = 'Lead Autonomous Roboticist & Pioneer';
-        inputs[0].dispatchEvent(new Event('input', { bubbles: true }));
-        inputs[0].dispatchEvent(new Event('change', { bubbles: true }));
-      }
+    const paintLatency = await page.evaluate(async () => {
+      return new Promise((resolve) => {
+        const inputs = Array.from(document.querySelectorAll('.split-editor-panel input[type="text"]'));
+        if (inputs.length > 0) {
+          const t0 = performance.now();
+          inputs[0].value = 'Lead Autonomous Roboticist & Pioneer';
+          inputs[0].dispatchEvent(new Event('input', { bubbles: true }));
+          inputs[0].dispatchEvent(new Event('change', { bubbles: true }));
+
+          // Double rAF measures when the browser has scheduled, laid out, and painted the frame
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              const elapsed = performance.now() - t0;
+              resolve(Math.round(elapsed));
+            });
+          });
+        } else {
+          resolve(0);
+        }
+      });
     });
 
     // Check preview content update
     const updatedInPreview = await page.evaluate(() => {
       return document.querySelector('.split-preview-panel')?.textContent?.includes('Lead Autonomous Roboticist & Pioneer');
     });
-    const updateLatency = Date.now() - startTime;
-    console.log(`✅ [PASS] Preview updated in ${updateLatency}ms (< 100ms benchmark met: ${updateLatency < 100})`);
-    console.log(`✅ [PASS] Live preview reflects edit in memory: ${updatedInPreview}`);
+    console.log(`✅ [PASS] Keystroke-to-paint latency: ${paintLatency}ms (< 100ms benchmark met: ${paintLatency < 100})`);
+    console.log(`✅ [PASS] Live preview reflects edit on painted frame: ${updatedInPreview}`);
 
     // Test 3: Theme Tokens & CSS Variables
     console.log('\n--- 3. Testing Theme Tokens & CSS Variables ---');

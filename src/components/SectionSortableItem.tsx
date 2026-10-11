@@ -48,12 +48,26 @@ export const SectionSortableItem: React.FC<SectionSortableItemProps> = ({
     updateSectionField,
     updateProjectItem,
     updateSkillItem,
+    activeTone,
   } = usePortfolioStore();
 
   const [isExpanded, setIsExpanded] = useState(false);
   const [isRewriting, setIsRewriting] = useState(false);
   const [rewriteError, setRewriteError] = useState<string | null>(null);
   const [rewriteSuccess, setRewriteSuccess] = useState(false);
+
+  // Measure keystroke-to-paint latency with double requestAnimationFrame
+  const measureKeystrokePaint = () => {
+    const start = performance.now();
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const latency = performance.now() - start;
+        if (typeof window !== 'undefined') {
+          (window as any).__lastKeystrokePaintMs = latency;
+        }
+      });
+    });
+  };
 
   // Per-section AI rewrite handler
   const handleRegenerateSection = async () => {
@@ -82,7 +96,7 @@ export const SectionSortableItem: React.FC<SectionSortableItemProps> = ({
       const res = await AiApiClient.rewriteSection({
         section: sectionKey,
         content: contentToRewrite,
-        tone: 'professional',
+        tone: activeTone || 'professional',
         role: portfolio.role,
       });
 
@@ -258,7 +272,10 @@ export const SectionSortableItem: React.FC<SectionSortableItemProps> = ({
               <input
                 type="text"
                 value={portfolio.tagline}
-                onChange={(e) => updateSectionField('tagline', e.target.value)}
+                onChange={(e) => {
+                  measureKeystrokePaint();
+                  updateSectionField('tagline', e.target.value);
+                }}
                 style={{
                   width: '100%',
                   padding: '8px 12px',
@@ -282,7 +299,10 @@ export const SectionSortableItem: React.FC<SectionSortableItemProps> = ({
                 <textarea
                   rows={2}
                   value={portfolio.shortBio}
-                  onChange={(e) => updateSectionField('shortBio', e.target.value)}
+                  onChange={(e) => {
+                    measureKeystrokePaint();
+                    updateSectionField('shortBio', e.target.value);
+                  }}
                   style={{
                     width: '100%',
                     padding: '8px 12px',
@@ -301,7 +321,10 @@ export const SectionSortableItem: React.FC<SectionSortableItemProps> = ({
                 <input
                   type="text"
                   value={portfolio.targetRole}
-                  onChange={(e) => updateSectionField('targetRole', e.target.value)}
+                  onChange={(e) => {
+                    measureKeystrokePaint();
+                    updateSectionField('targetRole', e.target.value);
+                  }}
                   style={{
                     width: '100%',
                     padding: '8px 12px',

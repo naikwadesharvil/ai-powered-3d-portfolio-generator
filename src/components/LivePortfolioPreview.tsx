@@ -3,14 +3,17 @@ import {
   Monitor,
   Tablet,
   Smartphone,
-  ExternalLink,
-  Mail,
-  MapPin,
   Sparkles,
-  Phone,
+  MapPin,
+  Mail,
 } from 'lucide-react';
 import { usePortfolioStore } from '../store/portfolioStore';
 import { themeTokensToCssVars } from '../types/themeTokens';
+import { AboutBento } from './AboutBento';
+import { SelectedWorks } from './SelectedWorks';
+import { ExperienceServices } from './ExperienceServices';
+import { CertificationsPublications } from './CertificationsPublications';
+import { ContactSection } from './ContactSection';
 
 export const LivePortfolioPreview: React.FC = () => {
   const { portfolio, themeTokens } = usePortfolioStore();
@@ -235,248 +238,66 @@ export const LivePortfolioPreview: React.FC = () => {
             </div>
           )}
 
-          {/* Bento High-Level Stats */}
-          {isVisible('about') && portfolio.bentoStats && (
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: viewportMode === 'mobile' ? '1fr' : 'repeat(3, 1fr)',
-                gap: '12px',
-              }}
-            >
-              {[portfolio.bentoStats.stat1, portfolio.bentoStats.stat2, portfolio.bentoStats.stat3].map((stat, i) => (
-                <div
-                  key={i}
-                  style={{
-                    padding: '16px',
-                    borderRadius: 'var(--border-radius, 12px)',
-                    background: 'var(--card-surface, rgba(255, 255, 255, 0.04))',
-                    border: '1px solid rgba(255, 255, 255, 0.08)',
-                    textAlign: 'center',
-                  }}
-                >
-                  <div style={{ fontSize: '0.68rem', fontFamily: 'var(--font-mono, monospace)', color: 'var(--text-secondary)' }}>
-                    {stat.title}
+          {/* Real Section Components (Shared with Live Site) */}
+          {(() => {
+            const rendered = new Set<string>();
+            const order = portfolio.sectionOrder || [
+              'about',
+              'projects',
+              'experience',
+              'publications',
+              'contact',
+            ];
+
+            return order.map((sectionKey) => {
+              if (sectionKey === 'about' && isVisible('about')) {
+                return (
+                  <div key="about" style={{ width: '100%' }}>
+                    <AboutBento portfolio={portfolio} onOpenResume={() => {}} />
                   </div>
-                  <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--accent-cyan)', margin: '4px 0' }}>
-                    {stat.value}
+                );
+              }
+              if (sectionKey === 'projects' && isVisible('projects')) {
+                return (
+                  <div key="projects" style={{ width: '100%' }}>
+                    <SelectedWorks portfolio={portfolio} />
                   </div>
-                  <div style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.6)' }}>
-                    {stat.subtext}
+                );
+              }
+              if (
+                (sectionKey === 'experience' || sectionKey === 'services') &&
+                (isVisible('experience') || isVisible('services'))
+              ) {
+                if (rendered.has('experience')) return null;
+                rendered.add('experience');
+                return (
+                  <div key="experience" style={{ width: '100%' }}>
+                    <ExperienceServices portfolio={portfolio} />
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* About / Bio Section */}
-          {isVisible('about') && (
-            <div
-              style={{
-                padding: '20px',
-                borderRadius: 'var(--border-radius, 12px)',
-                background: 'var(--card-surface, rgba(255, 255, 255, 0.03))',
-                border: '1px solid rgba(255, 255, 255, 0.06)',
-              }}
-            >
-              <h3
-                style={{
-                  fontFamily: 'var(--font-heading, "Space Grotesk", sans-serif)',
-                  fontSize: '1.15rem',
-                  fontWeight: 700,
-                  color: '#fff',
-                  marginBottom: '10px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                }}
-              >
-                <span>About</span>
-                <span style={{ height: '2px', flex: 1, background: 'rgba(255,255,255,0.08)' }} />
-              </h3>
-              <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', lineHeight: 1.6, margin: 0 }}>
-                {portfolio.fullBio || portfolio.shortBio}
-              </p>
-            </div>
-          )}
-
-          {/* Verified Projects Section */}
-          {isVisible('projects') && (
-            <div>
-              <h3
-                style={{
-                  fontFamily: 'var(--font-heading, "Space Grotesk", sans-serif)',
-                  fontSize: '1.15rem',
-                  fontWeight: 700,
-                  color: '#fff',
-                  marginBottom: '14px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                }}
-              >
-                <span>Featured Projects ({portfolio.projects.length})</span>
-                <span style={{ height: '2px', flex: 1, background: 'rgba(255,255,255,0.08)' }} />
-              </h3>
-
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: viewportMode === 'mobile' ? '1fr' : 'repeat(auto-fit, minmax(260px, 1fr))',
-                  gap: '14px',
-                }}
-              >
-                {portfolio.projects.map((proj) => (
-                  <div
-                    key={proj.id}
-                    style={{
-                      padding: '18px',
-                      borderRadius: 'var(--border-radius, 12px)',
-                      background: 'var(--card-surface, rgba(255, 255, 255, 0.03))',
-                      border: '1px solid rgba(255, 255, 255, 0.08)',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      justifyContent: 'space-between',
-                      gap: '12px',
-                    }}
-                  >
-                    <div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '6px' }}>
-                        <h4 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 700, color: '#fff' }}>
-                          {proj.title}
-                        </h4>
-                        <ExternalLink size={14} color="var(--accent-cyan)" />
-                      </div>
-                      <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: 1.4, margin: '0 0 10px' }}>
-                        {proj.description}
-                      </p>
-                      {proj.metrics && (
-                        <div style={{ fontSize: '0.74rem', color: 'var(--accent-cyan)', fontFamily: 'var(--font-mono, monospace)', marginBottom: '8px' }}>
-                          ⚡ {proj.metrics}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Tools / Tags */}
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                      {(proj.tools || proj.tags || []).slice(0, 4).map((tool, idx) => (
-                        <span
-                          key={idx}
-                          style={{
-                            padding: '2px 8px',
-                            borderRadius: '4px',
-                            background: 'rgba(255, 255, 255, 0.06)',
-                            fontSize: '0.68rem',
-                            color: 'rgba(255,255,255,0.8)',
-                            fontFamily: 'var(--font-mono, monospace)',
-                          }}
-                        >
-                          {tool}
-                        </span>
-                      ))}
-                    </div>
+                );
+              }
+              if (
+                (sectionKey === 'publications' || sectionKey === 'certifications') &&
+                (isVisible('publications') || isVisible('certifications'))
+              ) {
+                if (rendered.has('publications')) return null;
+                rendered.add('publications');
+                return (
+                  <div key="publications" style={{ width: '100%' }}>
+                    <CertificationsPublications portfolio={portfolio} />
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Verified Skills Section */}
-          {isVisible('skills') && (
-            <div>
-              <h3
-                style={{
-                  fontFamily: 'var(--font-heading, "Space Grotesk", sans-serif)',
-                  fontSize: '1.15rem',
-                  fontWeight: 700,
-                  color: '#fff',
-                  marginBottom: '12px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                }}
-              >
-                <span>Core Competencies ({portfolio.skills.length})</span>
-                <span style={{ height: '2px', flex: 1, background: 'rgba(255,255,255,0.08)' }} />
-              </h3>
-
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                {portfolio.skills.map((skill, idx) => (
-                  <span
-                    key={idx}
-                    style={{
-                      padding: '6px 12px',
-                      borderRadius: '8px',
-                      background: 'rgba(0, 242, 254, 0.08)',
-                      border: '1px solid rgba(0, 242, 254, 0.25)',
-                      color: '#ffffff',
-                      fontSize: '0.78rem',
-                      fontFamily: 'var(--font-mono, monospace)',
-                    }}
-                  >
-                    {skill.name}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Contact Section with Preserved Iconic Telephone Visual */}
-          {isVisible('contact') && (
-            <div
-              style={{
-                padding: '24px',
-                borderRadius: 'var(--border-radius, 12px)',
-                background: 'linear-gradient(135deg, rgba(0, 242, 254, 0.05), rgba(255, 0, 85, 0.05))',
-                border: '1px solid rgba(255, 255, 255, 0.12)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                flexWrap: 'wrap',
-                gap: '16px',
-              }}
-            >
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-                  <Phone size={18} color="var(--accent-magenta)" />
-                  <h4 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700, color: '#fff' }}>
-                    Let's Connect & Collaborate
-                  </h4>
-                </div>
-                <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
-                  Ready to discuss capstone projects, engineering challenges, or full-time opportunities.
-                </p>
-                <div style={{ marginTop: '10px', fontSize: '0.82rem', color: 'var(--accent-cyan)', fontFamily: 'var(--font-mono, monospace)' }}>
-                  {portfolio.email || 'alex.chen@engineering.io'}
-                </div>
-              </div>
-
-              {/* Telephone Visual Asset */}
-              <div
-                style={{
-                  width: '64px',
-                  height: '64px',
-                  borderRadius: '12px',
-                  background: 'rgba(255,255,255,0.04)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  overflow: 'hidden',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                }}
-              >
-                <img
-                  src="/assets/telephone.png"
-                  alt="Telephone Visual"
-                  style={{ width: '48px', height: '48px', objectFit: 'contain' }}
-                  onError={(e) => {
-                    // Fallback to Phone icon if image asset not in dist root
-                    (e.target as HTMLElement).style.display = 'none';
-                  }}
-                />
-              </div>
-            </div>
-          )}
+                );
+              }
+              if (sectionKey === 'contact' && isVisible('contact')) {
+                return (
+                  <div key="contact" style={{ width: '100%' }}>
+                    <ContactSection portfolio={portfolio} />
+                  </div>
+                );
+              }
+              return null;
+            });
+          })()}
         </div>
       </div>
     </div>

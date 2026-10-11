@@ -30,3 +30,11 @@ server/.env.*
 *.njsproj
 *.sln
 *.sw?
+
+# Scratch, Testing Artifacts & Screenshots
+scratch/
+screenshots/
+*.png.tmp
+test_output_*.png
+test_output_*.pdf
+test_output_*.docx
