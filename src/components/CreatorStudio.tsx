@@ -2644,11 +2644,11 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
                       textTransform: 'uppercase',
                     }}
                   >
-                    Coming Soon (Phase 6)
+                    Publishing is coming soon
                   </span>
                 </div>
                 <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: 1.4, margin: 0 }}>
-                  Live cloud hosting, vanity domains, and public URLs are scheduled for <strong>Phase 6: Publishing & Hosting</strong>. No fake links are generated. To deploy your portfolio today, download the <strong>Standalone Website ZIP</strong> above.
+                  Live cloud hosting, vanity domains, and public URLs are scheduled for an upcoming release. No fake links are generated. To deploy your portfolio today, download the <strong>Standalone Website ZIP</strong> above.
                 </p>
                 <div
                   style={{
