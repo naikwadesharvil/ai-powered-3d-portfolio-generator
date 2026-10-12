@@ -7,8 +7,6 @@ import JSZip from 'jszip';
 import { STUDENT_PROFILE } from './src/data/defaultProfiles.ts';
 import {
   generateResumeHtml,
-  generateResumePlainText,
-  generateResumeMarkdown,
   detectResumePlaceholders,
 } from './src/services/resumeGenerator.ts';
 import { generateDocxBuffer } from './src/services/docxGenerator.ts';
@@ -519,19 +517,15 @@ async function runTestSuite() {
     // Test 9: External Verification Tools Check (pdftotext, LibreOffice)
     // -------------------------------------------------------------
     console.log('\n--- Test 9: External Tooling Availability Check ---');
-    let pdftotextAvailable = false;
     try {
       execSync('pdftotext -v', { stdio: 'ignore' });
-      pdftotextAvailable = true;
       console.log('ℹ️ pdftotext is available on this system.');
     } catch {
       console.log('ℹ️ pdftotext is NOT installed in PATH on this Windows machine. (Reading order verified via DOM & Puppeteer text stream)');
     }
 
-    let libreOfficeAvailable = false;
     try {
       execSync('soffice --version', { stdio: 'ignore' });
-      libreOfficeAvailable = true;
       console.log('ℹ️ LibreOffice (soffice) is available on this system.');
     } catch {
       console.log('ℹ️ LibreOffice (soffice) is NOT installed in PATH on this Windows machine. (DOCX visual conversion skipped; open in Microsoft Word directly)');

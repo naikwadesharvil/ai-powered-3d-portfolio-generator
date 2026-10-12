@@ -8,7 +8,7 @@ export type {
   Education as EducationItem,
   Certification as CertificationItem,
   Publication as PublicationItem,
-  ServicePackage as ServicePackage,
+  ServicePackage,
   Testimonial as TestimonialItem,
   Telemetry as TelemetryData,
 } from './portfolioSchema';

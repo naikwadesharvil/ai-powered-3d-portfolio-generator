@@ -151,7 +151,7 @@ export const ResumeModal: React.FC<ResumeModalProps> = ({ portfolio: initialPort
       } else {
         setStatusMessage('Error downloading PDF.');
       }
-    } catch (e) {
+    } catch {
       setStatusMessage('Failed to download PDF.');
     } finally {
       setDownloadingPdf(false);
@@ -175,7 +175,7 @@ export const ResumeModal: React.FC<ResumeModalProps> = ({ portfolio: initialPort
       } else {
         setStatusMessage('Error generating Word document.');
       }
-    } catch (e) {
+    } catch {
       setStatusMessage('Failed to generate Word document.');
     } finally {
       setDownloadingDocx(false);

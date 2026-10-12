@@ -55,7 +55,7 @@ export const FrameScrubber: React.FC<FrameScrubberProps> = ({
   const currentProgressRef = useRef(0.5);
   const animFrameIdRef = useRef<number | null>(null);
   const idleAngleRef = useRef(0);
-  const lastInteractionTimeRef = useRef(Date.now());
+  const lastInteractionTimeRef = useRef(0);
 
   // 1. Progressive frame streaming with Viewport Intersection guard
   useEffect(() => {

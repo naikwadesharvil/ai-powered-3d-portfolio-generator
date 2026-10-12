@@ -158,7 +158,7 @@ aiRouter.post('/rewrite-section', async (req: Request, res: Response) => {
     });
   }
 
-  const { section, content, tone, instruction, role } = parseResult.data;
+  const { section, content, tone } = parseResult.data;
 
   if (OpenAiService.isOpenAiConfigured()) {
     try {

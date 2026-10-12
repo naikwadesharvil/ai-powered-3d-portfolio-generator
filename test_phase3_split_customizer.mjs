@@ -31,7 +31,7 @@ async function testPhase3() {
 
     // Open Creator Studio Modal
     console.log('Opening AI Portfolio Creator Studio...');
-    const studioTrigger = await page.waitForSelector('button[title*="Creator Studio"], button:has-text("CREATOR STUDIO"), nav button', { timeout: 5000 }).catch(() => null);
+    await page.waitForSelector('button[title*="Creator Studio"], button:has-text("CREATOR STUDIO"), nav button', { timeout: 5000 }).catch(() => null);
     
     // Fallback: evaluate clicking button that opens studio
     await page.evaluate(() => {

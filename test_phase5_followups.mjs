@@ -24,6 +24,7 @@ async function main() {
     const notFoundHeading = await page.evaluate(() => {
       return document.querySelector('h1')?.innerText || '';
     });
+    assert(notFoundHeading.includes('404'), '404 heading contains 404');
     const pageContent = await page.evaluate(() => document.body.innerText);
 
     assert(

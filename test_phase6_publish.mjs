@@ -114,7 +114,7 @@ async function runTests() {
   console.log('===============================================================\n');
 
   let passedCount = 0;
-  let totalCount = 7;
+  let totalCount = 8;
   let createdSlug = null;
   let createdOwnerToken = null;
 
@@ -367,6 +367,35 @@ async function runTests() {
         throw new Error(`Expected HTTP 400 Oversized Images, got ${resB64.status}: ${JSON.stringify(bodyB64)}`);
       }
 
+      // Case 6C: 1.5MB payload to /api/ai/* -> rejected with HTTP 413 (1MB limit)
+      const string1_5MB = 'x'.repeat(1.5 * 1024 * 1024);
+      const resAiOver = await fetch(`${API_SERVER}/api/ai/generate-portfolio`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: string1_5MB, role: 'student' }),
+      });
+      if (resAiOver.status === 413) {
+        logPass('TEST 6C: 1.5MB to /api/ai/* correctly rejected with HTTP 413 (1MB route limit enforced).');
+      } else {
+        throw new Error(`Expected HTTP 413 for 1.5MB to /api/ai/*, got ${resAiOver.status}`);
+      }
+
+      // Case 6D: 1.5MB payload to POST /api/portfolios -> accepted by 2MB route limit
+      const payload1_5MB = {
+        ...mockPortfolio,
+        fullBio: 'A'.repeat(1.4 * 1024 * 1024), // ~1.4MB string, total JSON ~1.45MB
+      };
+      const resPublish1_5MB = await fetch(`${API_SERVER}/api/portfolios`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload1_5MB),
+      });
+      if (resPublish1_5MB.status === 200 || resPublish1_5MB.status === 201) {
+        logPass('TEST 6D: 1.5MB payload to POST /api/portfolios accepted (2MB limit applies).');
+      } else {
+        throw new Error(`Expected HTTP 200/201 for 1.5MB to POST /api/portfolios, got status ${resPublish1_5MB.status}`);
+      }
+
       passedCount++;
     } catch (err) {
       logFail('TEST 6: Oversized payload handling test failed', err);
@@ -442,6 +471,94 @@ async function runTests() {
       }
     } catch (err) {
       logFail('TEST 7: Unpublish test failed', err);
+    }
+    // -----------------------------------------------------------------------
+    // TEST 8: CreatorStudio Publishing UI: Publish / Update Published Page Button,
+    //         No "cloud" wording, One-Time Owner Token Display & Re-Entry Input
+    // -----------------------------------------------------------------------
+    try {
+      const studioPage = await browser.newPage();
+      await studioPage.setViewport({ width: 1440, height: 900 });
+      await studioPage.goto(`${CLIENT_SERVER}/`, { waitUntil: 'domcontentloaded', timeout: 15000 });
+      await new Promise((r) => setTimeout(r, 600));
+
+      // Open CreatorStudio modal
+      const launchBtn = await studioPage.waitForSelector('#launch-studio-btn', { timeout: 10000 });
+      await launchBtn.click();
+      await studioPage.waitForSelector('#creator-studio-modal', { timeout: 10000 });
+      await new Promise((r) => setTimeout(r, 500));
+
+      // Navigate to Step 4 (Export / Publish)
+      await studioPage.evaluate(() => {
+        const buttons = Array.from(document.querySelectorAll('button'));
+        const step4Btn = buttons.find((b) => b.textContent && (b.textContent.includes('Download') || b.textContent.includes('Export') || b.textContent.includes('Step 4')));
+        if (step4Btn) step4Btn.click();
+      });
+      await new Promise((r) => setTimeout(r, 600));
+
+      // Check publish button text: should be "Publish" or "Update published page"
+      const publishBtn = await studioPage.waitForSelector('#btn-publish-portfolio, #btn-update-published-page', { timeout: 10000 });
+      let publishBtnText = await studioPage.evaluate((el) => el.textContent.trim(), publishBtn);
+      if (!publishBtnText.includes('Publish') && !publishBtnText.includes('Update published page')) {
+        throw new Error(`Expected button text to be "Publish" or "Update published page", got "${publishBtnText}"`);
+      }
+
+      // Check that NO "cloud" wording exists in the publishing UI
+      const publishingSectionText = await studioPage.evaluate(() => {
+        const modal = document.querySelector('#creator-studio-modal');
+        return modal ? modal.innerText : '';
+      });
+      const lowerText = publishingSectionText.toLowerCase();
+      const cloudMatches = lowerText.match(/\bcloud\b/g);
+      if (cloudMatches && cloudMatches.length > 0) {
+        throw new Error(`Found prohibited "cloud" wording in Studio UI: ${cloudMatches.length} occurrences`);
+      }
+
+      // If button is "Publish", click it to test live publish and verify owner token display
+      if (publishBtnText.includes('Publish') && !publishBtnText.includes('Update')) {
+        await publishBtn.click();
+        const tokenBanner = await studioPage.waitForSelector('#owner-token-banner', { timeout: 15000 });
+        const bannerText = await studioPage.evaluate((el) => el.innerText, tokenBanner);
+        if (!bannerText.includes('Owner Token') || !bannerText.includes('Save this to manage your page')) {
+          throw new Error(`Owner token banner missing expected instruction. Text: ${bannerText}`);
+        }
+        const tokenDisplay = await studioPage.$('#owner-token-display');
+        const tokenText = await studioPage.evaluate((el) => el.innerText.trim(), tokenDisplay);
+        if (tokenText.length !== 64) {
+          throw new Error(`Expected 64-char token display, got length ${tokenText.length}`);
+        }
+        // Verify update button is now visible
+        const updateBtn = await studioPage.waitForSelector('#btn-update-published-page', { timeout: 5000 });
+        const updateText = await studioPage.evaluate((el) => el.innerText.trim(), updateBtn);
+        if (!updateText.includes('Update published page')) {
+          throw new Error(`Expected button text "Update published page", got "${updateText}"`);
+        }
+      }
+
+      // Test Owner Token Re-Entry UI
+      const toggleTokenBtn = await studioPage.waitForSelector('#btn-toggle-token-input', { timeout: 5000 });
+      await toggleTokenBtn.click();
+      await new Promise((r) => setTimeout(r, 300));
+
+      const tokenInput = await studioPage.waitForSelector('#manual-owner-token-input', { timeout: 5000 });
+      await tokenInput.type('a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2');
+      const saveTokenBtn = await studioPage.waitForSelector('#btn-save-owner-token', { timeout: 5000 });
+      await saveTokenBtn.click();
+      await new Promise((r) => setTimeout(r, 400));
+
+      const feedbackText = await studioPage.evaluate(() => {
+        const modal = document.querySelector('#creator-studio-modal');
+        return modal ? modal.innerText : '';
+      });
+      if (!feedbackText.includes('Owner token saved')) {
+        throw new Error(`Owner token save feedback missing. UI text: ${feedbackText.slice(0, 300)}`);
+      }
+
+      logPass('TEST 8: CreatorStudio publishing UI validated: button named "Publish" / "Update published page", zero "cloud" wording in UI, and owner token re-entry tested successfully.');
+      passedCount++;
+      await studioPage.close();
+    } catch (err) {
+      logFail('TEST 8: CreatorStudio publishing UI verification failed', err);
     }
   } finally {
     await browser.close();

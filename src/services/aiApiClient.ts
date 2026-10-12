@@ -114,31 +114,30 @@ export class AiApiClient {
         };
       }
 
-      if (!res.ok) {
-        if (res.status === 400) {
-          const errData = await res.json().catch(() => ({}));
-          const err: any = new Error(errData.message || 'Validation Error');
-          err.fieldErrors = errData.fieldErrors;
-          throw err;
-        }
+      if (res.status === 400) {
         const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || errData.message || `Server error (${res.status}): AI synthesis service unavailable.`);
+        const err: any = new Error(errData.message || 'Validation Error');
+        err.fieldErrors = errData.fieldErrors;
+        throw err;
       }
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || errData.message || `Server error (${res.status}): AI synthesis service unavailable.`);
     } catch (err: any) {
-      throw err;
+      if (err?.fieldErrors) {
+        throw err;
+      }
+      // Client-side fallback
+      const fallbackPortfolio = AiEngine.generatePortfolioFromAutopilot(params);
+      return {
+        source: 'fallback',
+        liveAi: false,
+        isFallback: true,
+        model: 'client_offline_engine',
+        portfolio: fallbackPortfolio,
+        improvementSuggestions: ['Configure backend and OPENAI_API_KEY for dynamic real-time model synthesis.'],
+        message: 'Generated with the offline engine; connect AI for richer results',
+      };
     }
-
-    // Client-side fallback
-    const fallbackPortfolio = AiEngine.generatePortfolioFromAutopilot(params);
-    return {
-      source: 'fallback',
-      liveAi: false,
-      isFallback: true,
-      model: 'client_offline_engine',
-      portfolio: fallbackPortfolio,
-      improvementSuggestions: ['Configure backend and OPENAI_API_KEY for dynamic real-time model synthesis.'],
-      message: 'Generated with the offline engine; connect AI for richer results',
-    };
   }
 
   /**

@@ -26,12 +26,14 @@ import {
   Globe,
   ExternalLink,
   Loader2,
+  Key,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import {
   publishPortfolio,
   unpublishPortfolio,
   getStoredOwnerToken,
+  storeOwnerToken,
   getLastPublishedSlug,
 } from '../services/portfolioApi';
 import { compressPortfolioImages } from '../utils/imageCompressor';
@@ -100,7 +102,7 @@ const CreatorStudio: React.FC<CreatorStudioProps> = ({
         usePortfolioStore.getState().setPortfolio(portfolio, true);
       }
     }
-  }, [isOpen]);
+  }, [isOpen, portfolio]);
 
   // Step 4 Resume Template Picker, Live Preview & Page Count State
   const [step4ResumeTemplate, setStep4ResumeTemplate] = useState<ResumeTemplateId>('modern');
@@ -204,7 +206,7 @@ const CreatorStudio: React.FC<CreatorStudioProps> = ({
   // Public ZIP State
   const [exportingZip, setExportingZip] = useState(false);
 
-  // Live Cloud Publishing State (Phase 6 & 7)
+  // Live Publishing State (Phase 6 & 7)
   const [publishStatus, setPublishStatus] = useState<'idle' | 'publishing' | 'published' | 'error'>('idle');
   const [publishedSlug, setPublishedSlug] = useState<string | null>(null);
   const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
@@ -212,6 +214,11 @@ const CreatorStudio: React.FC<CreatorStudioProps> = ({
   const [imageWarnings, setImageWarnings] = useState<string[]>([]);
   const [isUnpublishing, setIsUnpublishing] = useState(false);
   const [copiedPublishLink, setCopiedPublishLink] = useState(false);
+  const [newlyIssuedToken, setNewlyIssuedToken] = useState<string | null>(null);
+  const [copiedOwnerToken, setCopiedOwnerToken] = useState(false);
+  const [showTokenInput, setShowTokenInput] = useState(false);
+  const [manualTokenInput, setManualTokenInput] = useState('');
+  const [tokenFeedback, setTokenFeedback] = useState<string | null>(null);
 
   // Initialize published slug & owner token from localStorage on open
   useEffect(() => {
@@ -246,11 +253,18 @@ const CreatorStudio: React.FC<CreatorStudioProps> = ({
         setPublishedSlug(res.slug);
         const fullUrl = `${window.location.origin}/p/${res.slug}`;
         setPublishedUrl(fullUrl);
-        confetti({
-          particleCount: 70,
-          spread: 60,
-          origin: { y: 0.6 },
-        });
+        if (res.ownerToken) {
+          setNewlyIssuedToken(res.ownerToken);
+        }
+        try {
+          confetti({
+            particleCount: 70,
+            spread: 60,
+            origin: { y: 0.6 },
+          });
+        } catch {
+          // ignore canvas-confetti issues in headless test environments
+        }
       } else {
         setPublishStatus('error');
         setPublishError(res.message || res.error || 'Failed to publish portfolio.');
@@ -259,6 +273,26 @@ const CreatorStudio: React.FC<CreatorStudioProps> = ({
       setPublishStatus('error');
       setPublishError(err?.message || 'Error communicating with publishing service.');
     }
+  };
+
+  const handleSaveManualToken = () => {
+    const trimmed = manualTokenInput.trim();
+    if (!trimmed) {
+      setTokenFeedback('Please enter a valid owner token.');
+      return;
+    }
+    const slug = publishedSlug || getLastPublishedSlug() || 'current-portfolio';
+    storeOwnerToken(slug, trimmed);
+    if (!publishedSlug) {
+      setPublishedSlug(slug);
+      setPublishedUrl(`${window.location.origin}/p/${slug}`);
+    }
+    setTokenFeedback('✓ Owner token saved for this device/session!');
+    setManualTokenInput('');
+    setTimeout(() => {
+      setTokenFeedback(null);
+      setShowTokenInput(false);
+    }, 2500);
   };
 
   const handleUnpublish = async () => {
@@ -654,7 +688,7 @@ const CreatorStudio: React.FC<CreatorStudioProps> = ({
     { id: 'civil', label: 'Civil', desc: 'Structural analysis, seismic codes, BIM, geotechnical' },
     { id: 'electrical', label: 'Electrical', desc: 'Circuits, PCB layout, power systems, motor drives' },
     { id: 'mechatronics', label: 'Mechatronics', desc: 'Robotics, ROS2, embedded firmware, sensor fusion, PLC' },
-    { id: 'cs_it', label: 'Computer Science', desc: 'Algorithms, neural networks, cloud systems, full-stack' },
+    { id: 'cs_it', label: 'Computer Science', desc: 'Algorithms, neural networks, distributed systems, full-stack' },
     { id: 'other', label: 'Other (Free text)', desc: 'Custom branch, specialized trades, or research fields' },
   ];
 
@@ -2589,7 +2623,7 @@ const CreatorStudio: React.FC<CreatorStudioProps> = ({
                 </div>
               </div>
 
-              {/* Public Share & Publish Card (Phase 6: Live Edge Hosting & Slug) */}
+              {/* Public Share & Publish Card (Phase 6: Live Hosting & Slug) */}
               <div
                 style={{
                   padding: '20px',
@@ -2606,7 +2640,7 @@ const CreatorStudio: React.FC<CreatorStudioProps> = ({
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <Globe size={18} color="var(--accent-cyan)" />
                     <span style={{ fontWeight: 700, fontSize: '0.95rem', color: '#fff' }}>
-                      Publish Live 3D Portfolio
+                      Publish 3D Portfolio
                     </span>
                   </div>
                   <span
@@ -2622,13 +2656,94 @@ const CreatorStudio: React.FC<CreatorStudioProps> = ({
                       fontWeight: 700,
                     }}
                   >
-                    {publishStatus === 'published' ? 'LIVE & ACTIVE' : publishStatus === 'publishing' ? 'DEPLOYING...' : 'CLOUD HOSTING'}
+                    {publishStatus === 'published' ? 'LIVE & ACTIVE' : publishStatus === 'publishing' ? 'DEPLOYING...' : 'ONLINE HOSTING'}
                   </span>
                 </div>
 
                 <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: 1.4, margin: 0 }}>
                   Deploy your portfolio to a persistent, unguessable public URL (<code style={{ color: 'var(--accent-cyan)' }}>/p/:slug</code>) that anyone can visit with zero studio UI.
                 </p>
+
+                {/* One-time Owner Token Display Banner */}
+                {newlyIssuedToken && (
+                  <div
+                    id="owner-token-banner"
+                    style={{
+                      padding: '12px 16px',
+                      borderRadius: '8px',
+                      background: 'rgba(16, 185, 129, 0.12)',
+                      border: '1px solid rgba(16, 185, 129, 0.4)',
+                      color: '#34d399',
+                      fontSize: '0.8rem',
+                      fontFamily: 'var(--font-mono)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '8px',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700 }}>
+                        <Key size={15} />
+                        <span>Owner Token: Save this to manage your page</span>
+                      </div>
+                      <button
+                        type="button"
+                        id="btn-copy-owner-token"
+                        onClick={() => {
+                          navigator.clipboard.writeText(newlyIssuedToken);
+                          setCopiedOwnerToken(true);
+                          setTimeout(() => setCopiedOwnerToken(false), 2500);
+                        }}
+                        style={{
+                          background: 'rgba(255,255,255,0.1)',
+                          border: '1px solid rgba(255,255,255,0.2)',
+                          color: '#fff',
+                          borderRadius: '4px',
+                          padding: '3px 8px',
+                          fontSize: '0.72rem',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                        }}
+                      >
+                        {copiedOwnerToken ? <Check size={12} /> : <Copy size={12} />}
+                        <span>{copiedOwnerToken ? 'COPIED' : 'COPY TOKEN'}</span>
+                      </button>
+                    </div>
+                    <div
+                      id="owner-token-display"
+                      style={{
+                        background: 'rgba(0,0,0,0.6)',
+                        padding: '8px 10px',
+                        borderRadius: '6px',
+                        wordBreak: 'break-all',
+                        fontSize: '0.74rem',
+                        color: '#a7f3d0',
+                        userSelect: 'all',
+                      }}
+                    >
+                      {newlyIssuedToken}
+                    </div>
+                    <div style={{ fontSize: '0.72rem', color: '#9ca3af', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span>⚠️ Save this to manage your page from any browser. It will only be shown once.</span>
+                      <button
+                        type="button"
+                        onClick={() => setNewlyIssuedToken(null)}
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          color: '#9ca3af',
+                          fontSize: '0.72rem',
+                          cursor: 'pointer',
+                          textDecoration: 'underline',
+                        }}
+                      >
+                        Dismiss
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 {/* Error Banner with Retry */}
                 {publishStatus === 'error' && (
@@ -2667,8 +2782,8 @@ const CreatorStudio: React.FC<CreatorStudioProps> = ({
                   </div>
                 )}
 
-                {/* Published State: Real Link, Copy, Open, and Unpublish */}
-                {publishStatus === 'published' && publishedUrl ? (
+                {/* Published State: Real Link, Copy, Open, Update, and Unpublish */}
+                {publishedUrl ? (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                     <div
                       style={{
@@ -2734,12 +2849,42 @@ const CreatorStudio: React.FC<CreatorStudioProps> = ({
                       </div>
                     </div>
 
+                    {/* Update Published Page Button */}
+                    <button
+                      type="button"
+                      id="btn-update-published-page"
+                      onClick={handlePublish}
+                      disabled={publishStatus === 'publishing'}
+                      className="btn-primary"
+                      style={{
+                        padding: '10px 20px',
+                        fontSize: '0.84rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '8px',
+                        width: '100%',
+                      }}
+                    >
+                      {publishStatus === 'publishing' ? (
+                        <>
+                          <Loader2 size={16} className="animate-spin" />
+                          <span>Updating published page...</span>
+                        </>
+                      ) : (
+                        <>
+                          <RotateCw size={15} />
+                          <span>Update published page</span>
+                        </>
+                      )}
+                    </button>
+
                     {/* Localhost Host Notice */}
                     {typeof window !== 'undefined' &&
                       (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && (
                         <div
                           style={{
-                            marginTop: '6px',
+                            marginTop: '4px',
                             padding: '10px 14px',
                             borderRadius: '8px',
                             background: 'rgba(245, 158, 11, 0.12)',
@@ -2755,7 +2900,7 @@ const CreatorStudio: React.FC<CreatorStudioProps> = ({
                         </div>
                       )}
 
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '6px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '4px' }}>
                       <button
                         type="button"
                         onClick={handleUnpublish}
@@ -2780,10 +2925,11 @@ const CreatorStudio: React.FC<CreatorStudioProps> = ({
                     </div>
                   </div>
                 ) : (
-                  /* Initial or Loading State */
+                  /* Initial or Loading State: Publish Button */
                   <div>
                     <button
                       type="button"
+                      id="btn-publish-portfolio"
                       onClick={handlePublish}
                       disabled={publishStatus === 'publishing'}
                       className="btn-primary"
@@ -2800,17 +2946,94 @@ const CreatorStudio: React.FC<CreatorStudioProps> = ({
                       {publishStatus === 'publishing' ? (
                         <>
                           <Loader2 size={16} className="animate-spin" />
-                          <span>PUBLISHING...</span>
+                          <span>Publishing...</span>
                         </>
                       ) : (
                         <>
                           <Globe size={16} />
-                          <span>PUBLISH LIVE 3D PORTFOLIO</span>
+                          <span>Publish</span>
                         </>
                       )}
                     </button>
                   </div>
                 )}
+
+                {/* Re-enter Owner Token Field */}
+                <div style={{ marginTop: '4px' }}>
+                  <button
+                    type="button"
+                    id="btn-toggle-token-input"
+                    onClick={() => setShowTokenInput(!showTokenInput)}
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      color: 'var(--text-secondary)',
+                      fontSize: '0.74rem',
+                      fontFamily: 'var(--font-mono)',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '4px 0',
+                      textDecoration: 'underline',
+                    }}
+                  >
+                    <Key size={13} />
+                    <span>{showTokenInput ? 'Hide token entry' : 'Have an owner token? Re-enter it here'}</span>
+                  </button>
+
+                  {showTokenInput && (
+                    <div
+                      style={{
+                        marginTop: '8px',
+                        padding: '12px',
+                        borderRadius: '8px',
+                        background: 'rgba(255,255,255,0.03)',
+                        border: '1px solid rgba(255,255,255,0.1)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '8px',
+                      }}
+                    >
+                      <label style={{ fontSize: '0.72rem', color: '#9ca3af', fontFamily: 'var(--font-mono)' }}>
+                        Re-enter Owner Token to manage your page:
+                      </label>
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <input
+                          type="text"
+                          id="manual-owner-token-input"
+                          placeholder="Paste your 64-character owner token"
+                          value={manualTokenInput}
+                          onChange={(e) => setManualTokenInput(e.target.value)}
+                          style={{
+                            flex: 1,
+                            background: 'rgba(0,0,0,0.5)',
+                            border: '1px solid rgba(255,255,255,0.15)',
+                            borderRadius: '6px',
+                            padding: '6px 10px',
+                            fontSize: '0.74rem',
+                            color: '#fff',
+                            fontFamily: 'var(--font-mono)',
+                          }}
+                        />
+                        <button
+                          type="button"
+                          id="btn-save-owner-token"
+                          onClick={handleSaveManualToken}
+                          className="btn-primary"
+                          style={{ padding: '6px 14px', fontSize: '0.74rem' }}
+                        >
+                          Save Token
+                        </button>
+                      </div>
+                      {tokenFeedback && (
+                        <span style={{ fontSize: '0.72rem', color: tokenFeedback.includes('✓') ? '#34d399' : '#f87171', fontFamily: 'var(--font-mono)' }}>
+                          {tokenFeedback}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
 
                 {/* Image Downscale / Compression Warning Notice */}
                 {imageWarnings.length > 0 && (

@@ -17,10 +17,10 @@ if (!fs.existsSync(STORAGE_DIR)) {
 
 export const portfoliosRouter = Router();
 
-// Strict Rate Limiting for portfolio creation & deletion (20 requests per 15 min per IP)
+// Rate Limiting for portfolio creation & deletion (100 requests per 15 min per IP; 1000 in tests)
 const portfolioPublishLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 20,
+  max: process.env.NODE_ENV === 'test' ? 1000 : (Number(process.env.RATE_LIMIT_PORTFOLIO_MAX) || 100),
   standardHeaders: true,
   legacyHeaders: false,
   message: {

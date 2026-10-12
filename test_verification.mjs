@@ -1,5 +1,5 @@
 import { AiEngine } from './src/services/aiEngine.ts';
-import { STUDENT_PROFILE, ROLE_PROFILES } from './src/data/defaultProfiles.ts';
+import { STUDENT_PROFILE } from './src/data/defaultProfiles.ts';
 import http from 'http';
 
 console.log('=====================================================');

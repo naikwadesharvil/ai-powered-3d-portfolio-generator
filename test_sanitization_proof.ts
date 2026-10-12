@@ -240,6 +240,7 @@ async function runSanitizationProof() {
     assert.strictEqual(res.status, 201, `Expected HTTP 201, got ${res.status}`);
     publishedSlug = body.slug;
     ownerToken = body.ownerToken;
+    assert(ownerToken, 'Owner token must be returned by publish endpoint');
 
     // Fetch the published data to verify server did NOT mangle C++ <T> or R&D
     const getRes = await fetch(`http://localhost:${API_PORT}/api/portfolios/${publishedSlug}`);

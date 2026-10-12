@@ -3,7 +3,6 @@ export * from '../../src/types/portfolioSchema.js';
 import {
   PersonaSchema,
   DisciplineSchema,
-  PortfolioDataSchema,
   AiStructuredPortfolioOutputSchema,
 } from '../../src/types/portfolioSchema.js';
 

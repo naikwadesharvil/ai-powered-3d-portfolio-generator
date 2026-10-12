@@ -2,8 +2,6 @@ import fs from 'fs';
 import path from 'path';
 import assert from 'assert';
 import puppeteer from 'puppeteer-core';
-import JSZip from 'jszip';
-import { STUDENT_PROFILE } from './src/data/defaultProfiles.ts';
 
 const CHROME_PATH = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
 const ARTIFACT_DIR = 'C:\\Users\\sharv\\.gemini\\antigravity-ide\\brain\\374fbe7b-fdcc-47ff-94b8-e189b92df0a6';
@@ -125,11 +123,11 @@ async function performHumanQualityReview() {
   };
 
   // Render Standard Resume
-  const stdResult = await renderPdfPageByPage('Sharvil_Naikwade_Resume.pdf', 'Sharvil_Resume');
+  await renderPdfPageByPage('Sharvil_Naikwade_Resume.pdf', 'Sharvil_Resume');
   // Render Long Resume (Multi-page check)
-  const longResult = await renderPdfPageByPage('Comprehensive_Long_Resume.pdf', 'Comprehensive_Long_Resume');
+  await renderPdfPageByPage('Comprehensive_Long_Resume.pdf', 'Comprehensive_Long_Resume');
   // Render Minimal Short Resume (Single-page edge check)
-  const minResult = await renderPdfPageByPage('Minimal_Short_Resume.pdf', 'Minimal_Short_Resume');
+  await renderPdfPageByPage('Minimal_Short_Resume.pdf', 'Minimal_Short_Resume');
 
   // -------------------------------------------------------------------------
   // 2. VERIFY ACCURACY OF EXTRACTED TEXT AGAINST SOURCE PROFILE

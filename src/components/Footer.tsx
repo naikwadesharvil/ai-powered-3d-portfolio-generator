@@ -8,6 +8,8 @@ interface FooterProps {
   portfolio: PortfolioData;
 }
 
+const CURRENT_YEAR = new Date().getFullYear();
+
 export const Footer: React.FC<FooterProps> = ({ portfolio }) => {
   const scrollToTop = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -136,7 +138,6 @@ export const Footer: React.FC<FooterProps> = ({ portfolio }) => {
                   href={sanitizeUrl(portfolio.github)}
                   target="_blank"
                   rel="noopener noreferrer"
-                  aria-label={`GitHub profile of ${portfolio.name}`}
                   style={{
                     fontFamily: 'var(--font-mono)',
                     fontSize: '0.82rem',
@@ -156,7 +157,6 @@ export const Footer: React.FC<FooterProps> = ({ portfolio }) => {
                   href={sanitizeUrl(portfolio.linkedin)}
                   target="_blank"
                   rel="noopener noreferrer"
-                  aria-label={`LinkedIn profile of ${portfolio.name}`}
                   style={{
                     fontFamily: 'var(--font-mono)',
                     fontSize: '0.82rem',
@@ -176,7 +176,6 @@ export const Footer: React.FC<FooterProps> = ({ portfolio }) => {
                   href={sanitizeUrl(portfolio.twitter)}
                   target="_blank"
                   rel="noopener noreferrer"
-                  aria-label={`Twitter/X profile of ${portfolio.name}`}
                   style={{
                     fontFamily: 'var(--font-mono)',
                     fontSize: '0.82rem',
@@ -277,7 +276,7 @@ export const Footer: React.FC<FooterProps> = ({ portfolio }) => {
               color: 'var(--text-secondary)',
             }}
           >
-            © {new Date().getFullYear()} {portfolio.name.toUpperCase()}. ALL RIGHTS RESERVED. POWERED BY ANTIGRAVITY AI.
+            © {CURRENT_YEAR} {portfolio.name.toUpperCase()}. ALL RIGHTS RESERVED. POWERED BY ANTIGRAVITY AI.
           </div>
 
           <button

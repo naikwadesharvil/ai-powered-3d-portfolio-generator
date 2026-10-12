@@ -61,9 +61,16 @@ app.use(
   })
 );
 
-// Payload size limits: Apply 2MB limit only to the portfolio publish route; keep 1MB elsewhere
-app.use('/api/portfolios', express.json({ limit: '2mb' }));
-app.use(express.json({ limit: '1mb' }));
+// Payload size limits: Apply 2MB limit strictly to POST /api/portfolios; keep 1MB for all other routes
+const json1mb = express.json({ limit: '1mb' });
+const json2mb = express.json({ limit: '2mb' });
+
+app.use((req: Request, res: Response, next: NextFunction) => {
+  if (req.method === 'POST' && (req.path === '/api/portfolios' || req.originalUrl === '/api/portfolios')) {
+    return json2mb(req, res, next);
+  }
+  return json1mb(req, res, next);
+});
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
 // Request Timeout Middleware (45s timeout guard)

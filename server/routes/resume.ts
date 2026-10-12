@@ -158,7 +158,7 @@ resumeRouter.post('/html', (req: Request, res: Response) => {
     const html = generateResumeHtml(portfolio, options);
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     return res.send(html);
-  } catch (error) {
+  } catch {
     return res.status(500).json({ error: 'Failed to generate HTML resume' });
   }
 });
