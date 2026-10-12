@@ -1,6 +1,7 @@
 import React from 'react';
-import { BookOpen, ShieldCheck, Trophy, Terminal } from 'lucide-react';
+import { BookOpen, ShieldCheck, Trophy, Terminal, ExternalLink } from 'lucide-react';
 import type { PortfolioData } from '../types/portfolio';
+import { sanitizeUrl } from '../utils/sanitize';
 
 interface CertificationsPublicationsProps {
   portfolio: PortfolioData;
@@ -125,7 +126,25 @@ export const CertificationsPublications: React.FC<CertificationsPublicationsProp
                         marginBottom: '10px',
                       }}
                     >
-                      {pub.title}
+                      {pub.link ? (
+                        <a
+                          href={sanitizeUrl(pub.link)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            color: '#ffffff',
+                            textDecoration: 'none',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                          }}
+                        >
+                          <span>{pub.title}</span>
+                          <ExternalLink size={13} style={{ color: 'var(--accent-cyan)' }} />
+                        </a>
+                      ) : (
+                        pub.title
+                      )}
                     </h3>
                     <div
                       style={{
@@ -184,7 +203,25 @@ export const CertificationsPublications: React.FC<CertificationsPublicationsProp
                           marginBottom: '6px',
                         }}
                       >
-                        {cert.name}
+                        {cert.credentialUrl ? (
+                          <a
+                            href={sanitizeUrl(cert.credentialUrl)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{
+                              color: '#ffffff',
+                              textDecoration: 'none',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '6px',
+                            }}
+                          >
+                            <span>{cert.name}</span>
+                            <ExternalLink size={13} style={{ color: 'var(--accent-magenta)' }} />
+                          </a>
+                        ) : (
+                          cert.name
+                        )}
                       </h3>
                       <div
                         style={{

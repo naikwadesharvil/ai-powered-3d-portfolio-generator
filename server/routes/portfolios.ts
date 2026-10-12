@@ -4,13 +4,13 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { PortfolioDataSchema } from '../schemas/portfolioSchema.js';
+import { PortfolioDataSchema, normalizePortfolioData } from '../schemas/portfolioSchema.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Portfolios storage directory
-const STORAGE_DIR = path.resolve(__dirname, '../../server/data/portfolios');
+export const STORAGE_DIR = path.resolve(__dirname, '../../server/data/portfolios');
 if (!fs.existsSync(STORAGE_DIR)) {
   fs.mkdirSync(STORAGE_DIR, { recursive: true });
 }
@@ -31,40 +31,57 @@ const portfolioPublishLimiter = rateLimit({
 });
 
 /**
- * Recursively strip base64 image strings larger than 200KB (approx 266,666 chars)
- * to prevent storage bloat or DoS attacks.
+ * Validates token against a stored sha256 hash using timing-safe comparison
  */
-function stripLargeBase64Images(obj: any): any {
-  if (typeof obj === 'string') {
-    if (obj.startsWith('data:image/') && obj.length > 200000) {
-      return ''; // Strip oversized base64
-    }
-    return obj;
+function verifyOwnerToken(providedToken: string, storedHash: string): boolean {
+  if (!providedToken || !storedHash) return false;
+  try {
+    const providedHash = crypto.createHash('sha256').update(providedToken.trim()).digest('hex');
+    const bufProvided = Buffer.from(providedHash, 'utf8');
+    const bufStored = Buffer.from(storedHash, 'utf8');
+    if (bufProvided.length !== bufStored.length) return false;
+    return crypto.timingSafeEqual(bufProvided, bufStored);
+  } catch {
+    return false;
   }
-  if (Array.isArray(obj)) {
-    return obj.map(stripLargeBase64Images);
-  }
-  if (obj !== null && typeof obj === 'object') {
-    const cleaned: Record<string, any> = {};
-    for (const [key, val] of Object.entries(obj)) {
-      cleaned[key] = stripLargeBase64Images(val);
-    }
-    return cleaned;
-  }
-  return obj;
 }
 
 /**
- * Sanitize text fields and URLs to prevent stored XSS
+ * Check for oversized base64 images without silently dropping them.
+ * Returns array of field paths that exceed the ~200KB limit.
+ */
+function findOversizedBase64Images(obj: any, currentPath = ''): string[] {
+  const oversized: string[] = [];
+  if (typeof obj === 'string') {
+    // 200KB binary is ~266,667 base64 chars
+    if (obj.startsWith('data:image/') && obj.length > 270000) {
+      oversized.push(currentPath || 'image');
+    }
+  } else if (Array.isArray(obj)) {
+    obj.forEach((item, idx) => {
+      oversized.push(...findOversizedBase64Images(item, `${currentPath}[${idx}]`));
+    });
+  } else if (obj !== null && typeof obj === 'object') {
+    for (const [key, val] of Object.entries(obj)) {
+      const nextPath = currentPath ? `${currentPath}.${key}` : key;
+      oversized.push(...findOversizedBase64Images(val, nextPath));
+    }
+  }
+  return oversized;
+}
+
+/**
+ * Neutralizes dangerous URI schemes (e.g. javascript:) on link fields.
+ * CRITICAL: Legitimate text like "C++ <T>" or "R&D" is preserved untouched without input mangling.
  */
 function sanitizePortfolioPayload(data: any): any {
   if (typeof data === 'string') {
-    // Neutralize dangerous javascript: and data: text schemes
-    if (data.trim().toLowerCase().startsWith('javascript:')) {
+    const trimmedLower = data.trim().toLowerCase();
+    // Neutralize dangerous javascript:, vbscript:, or protocol-relative schemes
+    if (trimmedLower.startsWith('javascript:') || trimmedLower.startsWith('vbscript:')) {
       return '#';
     }
-    // Remove inline <script> tags
-    return data.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+    return data;
   }
   if (Array.isArray(data)) {
     return data.map(sanitizePortfolioPayload);
@@ -80,8 +97,30 @@ function sanitizePortfolioPayload(data: any): any {
 }
 
 /**
+ * Extract owner token from header, Authorization Bearer, query or body
+ */
+function extractOwnerToken(req: Request): string | null {
+  const headerToken = req.headers['x-owner-token'];
+  if (typeof headerToken === 'string' && headerToken.trim()) {
+    return headerToken.trim();
+  }
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.toLowerCase().startsWith('bearer ')) {
+    return authHeader.slice(7).trim();
+  }
+  if (req.body && typeof req.body.ownerToken === 'string' && req.body.ownerToken.trim()) {
+    return req.body.ownerToken.trim();
+  }
+  if (req.query && typeof req.query.token === 'string' && req.query.token.trim()) {
+    return req.query.token.trim();
+  }
+  return null;
+}
+
+/**
  * POST /api/portfolios
- * Validate PortfolioData with Zod, cap size, strip large base64, generate unguessable slug, and save.
+ * Creates a new portfolio (returns slug + private owner token)
+ * OR updates an existing portfolio in-place if slug + matching owner token is provided.
  */
 portfoliosRouter.post('/', portfolioPublishLimiter, async (req: Request, res: Response) => {
   try {
@@ -97,36 +136,122 @@ portfoliosRouter.post('/', portfolioPublishLimiter, async (req: Request, res: Re
       });
     }
 
-    // Strip oversized base64 images
-    const base64Cleaned = stripLargeBase64Images(rawBody);
+    // Guard: Check for oversized base64 images (do NOT silently drop!)
+    const oversizedImages = findOversizedBase64Images(rawBody);
+    if (oversizedImages.length > 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Oversized Images',
+        message: `Image(s) at ${oversizedImages.join(', ')} exceed 200KB limit. Downscale/compress images before publishing.`,
+      });
+    }
 
-    // Sanitize malicious scripts & schemes
-    const sanitized = sanitizePortfolioPayload(base64Cleaned);
+    // Sanitize dangerous schemes while preserving legitimate text like "C++ <T>" and "R&D"
+    const sanitized = sanitizePortfolioPayload(rawBody);
 
-    // Validate using Zod
-    const parseResult = PortfolioDataSchema.safeParse(sanitized);
+    // Extract target slug & owner token if this is an update request
+    const requestedSlug = typeof rawBody.slug === 'string' && rawBody.slug.trim() ? rawBody.slug.trim() : null;
+    const providedOwnerToken = extractOwnerToken(req);
+
+    // If client requested updating a specific slug:
+    if (requestedSlug) {
+      if (!/^[a-zA-Z0-9_-]{4,64}$/.test(requestedSlug)) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid Slug',
+          message: 'Requested slug format is invalid.',
+        });
+      }
+
+      const filePath = path.join(STORAGE_DIR, `${requestedSlug}.json`);
+      if (!fs.existsSync(filePath)) {
+        return res.status(404).json({
+          success: false,
+          error: 'Not Found',
+          message: 'Portfolio with this slug does not exist.',
+        });
+      }
+
+      if (!providedOwnerToken) {
+        return res.status(401).json({
+          success: false,
+          error: 'Unauthorized',
+          message: 'Owner token required to update an existing portfolio.',
+        });
+      }
+
+      const existingRecord = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+      if (!verifyOwnerToken(providedOwnerToken, existingRecord.ownerTokenHash)) {
+        return res.status(403).json({
+          success: false,
+          error: 'Forbidden',
+          message: 'Invalid owner token. You do not have permission to update this portfolio.',
+        });
+      }
+
+      // Validate data with Zod (normalizing any legacy or flat properties)
+      const normalized = normalizePortfolioData(sanitized);
+      const parseResult = PortfolioDataSchema.safeParse(normalized);
+      if (!parseResult.success) {
+        const issues = parseResult.error.issues || (parseResult.error as any).errors || [];
+        return res.status(400).json({
+          success: false,
+          error: 'Validation Error',
+          message: 'Invalid portfolio data structure.',
+          details: issues.map((e: any) => ({
+            path: Array.isArray(e.path) ? e.path.join('.') : String(e.path || ''),
+            message: e.message,
+          })),
+        });
+      }
+
+      // Update existing portfolio in-place, keeping the same slug and ownerTokenHash
+      const updatedPortfolio = {
+        ...parseResult.data,
+        slug: requestedSlug,
+        ownerTokenHash: existingRecord.ownerTokenHash,
+        publishedAt: existingRecord.publishedAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      fs.writeFileSync(filePath, JSON.stringify(updatedPortfolio, null, 2), 'utf-8');
+
+      return res.status(200).json({
+        success: true,
+        slug: requestedSlug,
+        ownerToken: providedOwnerToken,
+        url: `/p/${requestedSlug}`,
+        publishedAt: updatedPortfolio.updatedAt,
+        message: 'Portfolio updated successfully.',
+      });
+    }
+
+    // INITIAL PUBLISH: Generate unguessable slug and private owner token
+    const normalized = normalizePortfolioData(sanitized);
+    const parseResult = PortfolioDataSchema.safeParse(normalized);
     if (!parseResult.success) {
+      const issues = parseResult.error.issues || (parseResult.error as any).errors || [];
       return res.status(400).json({
         success: false,
         error: 'Validation Error',
         message: 'Invalid portfolio data structure.',
-        details: parseResult.error.errors.map((e) => ({
-          path: e.path.join('.'),
+        details: issues.map((e: any) => ({
+          path: Array.isArray(e.path) ? e.path.join('.') : String(e.path || ''),
           message: e.message,
         })),
       });
     }
 
     const validatedData = parseResult.data;
-
-    // Generate unguessable 12-char cryptographically random slug
     const slug = crypto.randomBytes(6).toString('hex');
-    const filePath = path.join(STORAGE_DIR, `${slug}.json`);
+    const ownerToken = crypto.randomBytes(32).toString('hex');
+    const ownerTokenHash = crypto.createHash('sha256').update(ownerToken).digest('hex');
 
-    // Attach publish metadata
+    const filePath = path.join(STORAGE_DIR, `${slug}.json`);
     const portfolioToSave = {
       ...validatedData,
       slug,
+      ownerTokenHash,
       publishedAt: new Date().toISOString(),
     };
 
@@ -135,6 +260,7 @@ portfoliosRouter.post('/', portfolioPublishLimiter, async (req: Request, res: Re
     return res.status(201).json({
       success: true,
       slug,
+      ownerToken, // Returned ONLY to the author upon creation
       url: `/p/${slug}`,
       publishedAt: portfolioToSave.publishedAt,
       message: 'Portfolio published successfully.',
@@ -151,13 +277,13 @@ portfoliosRouter.post('/', portfolioPublishLimiter, async (req: Request, res: Re
 
 /**
  * GET /api/portfolios/:slug
- * Retrieve published portfolio by slug.
+ * Public read-only endpoint. Slug alone grants read-only access.
+ * OwnerTokenHash is strictly removed so private credentials are never exposed.
  */
 portfoliosRouter.get('/:slug', async (req: Request, res: Response) => {
   try {
     const { slug } = req.params;
 
-    // Validate slug format: alphanumeric or hyphens/underscores, 4-64 chars
     if (!slug || !/^[a-zA-Z0-9_-]{4,64}$/.test(slug)) {
       return res.status(400).json({
         success: false,
@@ -179,9 +305,12 @@ portfoliosRouter.get('/:slug', async (req: Request, res: Response) => {
     const fileContent = fs.readFileSync(filePath, 'utf-8');
     const portfolio = JSON.parse(fileContent);
 
+    // Security: Strip private owner token hash before returning public read-only record
+    const { ownerTokenHash: _removed, ...publicPortfolio } = portfolio;
+
     return res.json({
       success: true,
-      portfolio,
+      portfolio: publicPortfolio,
     });
   } catch (err: any) {
     console.error('[Portfolio Fetch Error]', err);
@@ -196,6 +325,10 @@ portfoliosRouter.get('/:slug', async (req: Request, res: Response) => {
 /**
  * DELETE /api/portfolios/:slug
  * Unpublish/remove portfolio by slug.
+ * Requires valid owner token:
+ * - Missing token -> 401 Unauthorized
+ * - Invalid token -> 403 Forbidden
+ * - Valid token -> 200 OK
  */
 portfoliosRouter.delete('/:slug', portfolioPublishLimiter, async (req: Request, res: Response) => {
   try {
@@ -209,6 +342,15 @@ portfoliosRouter.delete('/:slug', portfolioPublishLimiter, async (req: Request, 
       });
     }
 
+    const providedOwnerToken = extractOwnerToken(req);
+    if (!providedOwnerToken) {
+      return res.status(401).json({
+        success: false,
+        error: 'Unauthorized',
+        message: 'Owner token is required to unpublish this portfolio.',
+      });
+    }
+
     const filePath = path.join(STORAGE_DIR, `${slug}.json`);
 
     if (!fs.existsSync(filePath)) {
@@ -216,6 +358,17 @@ portfoliosRouter.delete('/:slug', portfolioPublishLimiter, async (req: Request, 
         success: false,
         error: 'Not Found',
         message: 'Portfolio not found or already unpublished.',
+      });
+    }
+
+    const fileContent = fs.readFileSync(filePath, 'utf-8');
+    const portfolio = JSON.parse(fileContent);
+
+    if (!verifyOwnerToken(providedOwnerToken, portfolio.ownerTokenHash)) {
+      return res.status(403).json({
+        success: false,
+        error: 'Forbidden',
+        message: 'Invalid owner token. You do not have permission to delete this portfolio.',
       });
     }
 

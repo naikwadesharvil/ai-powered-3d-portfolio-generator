@@ -26,31 +26,45 @@ app.use(
 // Disallow server technology identification header
 app.disable('x-powered-by');
 
-// CORS Configuration
-const allowedOrigins = [
-  process.env.CLIENT_ORIGIN || 'http://localhost:5173',
-  'http://localhost:5173',
-  'http://127.0.0.1:5173',
-];
+// CORS Configuration: Whitelisted explicit origins only (never '*' wildcard)
+const configuredOrigins = (process.env.CLIENT_ORIGINS || process.env.CLIENT_ORIGIN || '')
+  .split(',')
+  .map((o) => o.trim())
+  .filter(Boolean);
+
+export const CORS_ALLOWED_ORIGINS = Array.from(
+  new Set([
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+    'http://localhost:5000',
+    'http://127.0.0.1:5000',
+    ...configuredOrigins,
+  ])
+);
 
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Allow requests with no origin (like mobile apps, curl, or same-origin server requests)
-      if (!origin || allowedOrigins.includes(origin)) {
+      // Allow requests with no origin (like curl, same-origin, or internal server-side requests)
+      if (!origin) {
         return callback(null, true);
       }
-      return callback(null, true); // Permissive in local dev
+      if (CORS_ALLOWED_ORIGINS.includes(origin)) {
+        return callback(null, true);
+      }
+      // Strictly reject disallowed origins (never wildcard '*')
+      return callback(new Error(`CORS blocked for origin: ${origin}. Not in allowed whitelist.`));
     },
     credentials: true,
-    methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Owner-Token'],
   })
 );
 
-// Payload size limits to prevent Denial of Service (2MB limit for portfolio data)
-app.use(express.json({ limit: '2mb' }));
-app.use(express.urlencoded({ extended: true, limit: '2mb' }));
+// Payload size limits: Apply 2MB limit only to the portfolio publish route; keep 1MB elsewhere
+app.use('/api/portfolios', express.json({ limit: '2mb' }));
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
 // Request Timeout Middleware (45s timeout guard)
 app.use((req: Request, res: Response, next: NextFunction) => {

@@ -12,19 +12,27 @@ export function sanitizeUrl(url?: string | null): string {
   if (!url) return '';
   const trimmed = url.trim();
 
-  // Allow anchor references and relative paths
-  if (trimmed.startsWith('#') || (trimmed.startsWith('/') && !trimmed.startsWith('//'))) {
+  // Reject protocol-relative URLs (e.g. //evil.com, /\\evil.com, \\evil.com)
+  if (trimmed.startsWith('//') || trimmed.startsWith('/\\') || trimmed.startsWith('\\') || trimmed.startsWith('/#')) {
+    return '#';
+  }
+
+  // Allow anchor references and safe relative paths (e.g. #about, /p/123)
+  if (trimmed.startsWith('#') || (trimmed.startsWith('/') && !trimmed.startsWith('//') && !trimmed.startsWith('/\\'))) {
     return trimmed;
   }
 
-  // Allow mailto:
+  // Allow mailto: and tel:
   if (trimmed.toLowerCase().startsWith('mailto:')) {
-    // Basic verification of mailto
     const cleanMailto = trimmed.replace(/[\r\n\t]/g, '');
     return cleanMailto;
   }
+  if (trimmed.toLowerCase().startsWith('tel:')) {
+    const cleanTel = trimmed.replace(/[\r\n\t]/g, '');
+    return cleanTel;
+  }
 
-  // Allow http: and https:
+  // Allow strict http: and https: protocols only
   if (/^https?:\/\//i.test(trimmed)) {
     try {
       const parsed = new URL(trimmed);
@@ -36,7 +44,7 @@ export function sanitizeUrl(url?: string | null): string {
     }
   }
 
-  // Any other scheme (javascript:, data:, vbscript:, etc.) is dangerous
+  // Any other scheme (javascript:, data:, vbscript:, etc.) or malformed URL is neutralized
   return '#';
 }
 

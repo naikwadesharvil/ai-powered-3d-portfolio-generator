@@ -16,9 +16,8 @@ import { NotFoundPage } from './components/NotFoundPage';
 import { usePortfolioStore } from './store/portfolioStore';
 import { CURATED_THEME_PRESETS, themeTokensToCssVars } from './types/themeTokens';
 import { getPublishedPortfolio } from './services/portfolioApi';
-
 import CreatorStudio from './components/CreatorStudio';
-const ResumeModal = React.lazy(() => import('./components/ResumeModal'));
+import ResumeModal from './components/ResumeModal';
 
 function updateDocumentMeta(p: PortfolioData) {
   const name = p.name || p.profile?.name || 'Engineer';
@@ -77,6 +76,8 @@ export function App() {
   const [publicPortfolio, setPublicPortfolio] = useState<PortfolioData | null>(null);
   const [publicLoading, setPublicLoading] = useState<boolean>(isSlugRoute);
   const [publicError, setPublicError] = useState<string | null>(null);
+
+  console.log('[DEBUG App render] isStudioOpen:', isStudioOpen, 'isSlugRoute:', isSlugRoute);
 
   useEffect(() => {
     if (isSlugRoute && currentSlug) {
@@ -267,7 +268,12 @@ export function App() {
           }}
         >
           <button
-            onClick={() => setIsStudioOpen(true)}
+            id="launch-studio-btn"
+            data-testid="studio-launch-btn"
+            onClick={() => {
+              console.log('[DEBUG App] Studio button clicked! Setting isStudioOpen=true');
+              setIsStudioOpen(true);
+            }}
             style={{
               backgroundColor: 'var(--accent-cyan)',
               backgroundImage: 'linear-gradient(135deg, var(--accent-cyan) 0%, var(--accent-magenta) 100%)',
@@ -367,12 +373,12 @@ export function App() {
                 return <ExperienceServices portfolio={activePortfolio} key="experience" />;
               }
               if (
-                (sectionKey === 'publications' || sectionKey === 'certifications') &&
-                (activePortfolio.sectionVisibility.publications || activePortfolio.sectionVisibility.certifications)
+                (sectionKey === 'publications' || sectionKey === 'certifications' || sectionKey === 'credentials') &&
+                (activePortfolio.sectionVisibility.publications || activePortfolio.sectionVisibility.certifications || (activePortfolio.sectionVisibility as any).credentials)
               ) {
-                if (rendered.has('publications')) return null;
-                rendered.add('publications');
-                return <CertificationsPublications portfolio={activePortfolio} key="publications" />;
+                if (rendered.has('credentials')) return null;
+                rendered.add('credentials');
+                return <CertificationsPublications portfolio={activePortfolio} key="credentials" />;
               }
               if (sectionKey === 'contact' && activePortfolio.sectionVisibility.contact) {
                 return <ContactSection portfolio={activePortfolio} key="contact" />;
@@ -386,7 +392,6 @@ export function App() {
         <Footer portfolio={activePortfolio} />
       </div>
 
-      {/* Layer A: Portfolio Creator Studio Modal (Only in Studio / Authoring Mode) */}
       {!isSlugRoute && isStudioOpen && (
         <CreatorStudio
           isOpen={isStudioOpen}
@@ -401,13 +406,11 @@ export function App() {
 
       {/* Layer B: Professional ATS Resume Studio & Preview Modal */}
       {isResumeOpen && (
-        <React.Suspense fallback={null}>
-          <ResumeModal
-            isOpen={isResumeOpen}
-            onClose={() => setIsResumeOpen(false)}
-            portfolio={activePortfolio}
-          />
-        </React.Suspense>
+        <ResumeModal
+          isOpen={isResumeOpen}
+          onClose={() => setIsResumeOpen(false)}
+          portfolio={activePortfolio}
+        />
       )}
     </div>
   );

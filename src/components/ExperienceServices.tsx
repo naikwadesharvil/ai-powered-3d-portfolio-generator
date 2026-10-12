@@ -1,6 +1,7 @@
 import React from 'react';
 import { CheckCircle2, MessageSquare, Terminal, Building2, Calendar } from 'lucide-react';
 import type { PortfolioData } from '../types/portfolio';
+import { sanitizeUrl } from '../utils/sanitize';
 
 interface ExperienceServicesProps {
   portfolio: PortfolioData;
@@ -243,7 +244,18 @@ export const ExperienceServices: React.FC<ExperienceServicesProps> = ({ portfoli
                           }}
                         >
                           <Building2 size={14} />
-                          <span>{exp.company}</span>
+                          {(exp as any).companyUrl || (exp as any).link ? (
+                            <a
+                              href={sanitizeUrl((exp as any).companyUrl || (exp as any).link)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{ color: 'inherit', textDecoration: 'underline', textUnderlineOffset: '2px' }}
+                            >
+                              {exp.company}
+                            </a>
+                          ) : (
+                            <span>{exp.company}</span>
+                          )}
                           {exp.location && <span>• {exp.location}</span>}
                         </div>
                       </div>

@@ -116,9 +116,10 @@ async function runTests() {
   let passedCount = 0;
   let totalCount = 7;
   let createdSlug = null;
+  let createdOwnerToken = null;
 
   // -------------------------------------------------------------------------
-  // TEST 1: Publish Valid Portfolio (POST /api/portfolios)
+  // TEST 1: Publish Valid Portfolio (POST /api/portfolios) -> Returns Slug + Owner Token
   // -------------------------------------------------------------------------
   try {
     const res = await fetch(`${API_SERVER}/api/portfolios`, {
@@ -128,9 +129,17 @@ async function runTests() {
     });
 
     const body = await res.json();
-    if (res.status === 201 && body.success && body.slug && body.slug.length === 12) {
+    if (
+      res.status === 201 &&
+      body.success &&
+      body.slug &&
+      body.slug.length === 12 &&
+      body.ownerToken &&
+      body.ownerToken.length === 64
+    ) {
       createdSlug = body.slug;
-      logPass(`TEST 1: Portfolio published successfully with unguessable 12-char slug "${createdSlug}"`);
+      createdOwnerToken = body.ownerToken;
+      logPass(`TEST 1: Portfolio published successfully with slug "${createdSlug}" and private owner token (${body.ownerToken.length}-char hex)`);
       passedCount++;
     } else {
       throw new Error(`Unexpected response: ${res.status} ${JSON.stringify(body)}`);
@@ -140,18 +149,25 @@ async function runTests() {
   }
 
   // -------------------------------------------------------------------------
-  // TEST 2: Fetch Published Portfolio (GET /api/portfolios/:slug)
+  // TEST 2: Fetch Published Portfolio (GET /api/portfolios/:slug) -> Read-Only (No Secret Token)
   // -------------------------------------------------------------------------
   try {
     if (!createdSlug) throw new Error('No slug from Test 1');
     const res = await fetch(`${API_SERVER}/api/portfolios/${createdSlug}`);
     const body = await res.json();
 
-    if (res.status === 200 && body.success && body.portfolio && body.portfolio.name === mockPortfolio.name) {
-      logPass(`TEST 2: GET /api/portfolios/${createdSlug} returned validated portfolio data`);
+    if (
+      res.status === 200 &&
+      body.success &&
+      body.portfolio &&
+      body.portfolio.name === mockPortfolio.name &&
+      body.portfolio.ownerTokenHash === undefined &&
+      body.portfolio.ownerToken === undefined
+    ) {
+      logPass(`TEST 2: GET /api/portfolios/${createdSlug} returned validated portfolio data without exposing ownerToken or its hash`);
       passedCount++;
     } else {
-      throw new Error(`Invalid fetch response: ${res.status} ${JSON.stringify(body)}`);
+      throw new Error(`Invalid fetch response or owner token leaked: ${res.status} ${JSON.stringify(body)}`);
     }
   } catch (err) {
     logFail('TEST 2: Failed to fetch published portfolio', err);
@@ -328,7 +344,7 @@ async function runTests() {
         throw new Error(`Expected HTTP 413 for oversized payload, got status ${resOver.status}`);
       }
 
-      // Case B: Base64 image over 200KB is stripped
+      // Case B: Oversized base64 image (> 200KB) is NOT silently dropped; rejected with HTTP 400 warning
       const largeBase64 = 'data:image/png;base64,' + 'B'.repeat(300000); // ~300KB
       const base64Payload = {
         ...mockPortfolio,
@@ -345,16 +361,10 @@ async function runTests() {
       });
 
       const bodyB64 = await resB64.json();
-      if (!bodyB64.success) throw new Error('Base64 portfolio publish failed');
-
-      // Fetch saved portfolio to check avatarUrl was stripped
-      const fetchB64 = await fetch(`${API_SERVER}/api/portfolios/${bodyB64.slug}`);
-      const savedB64 = await fetchB64.json();
-
-      if (savedB64.portfolio.profile.avatarUrl === '') {
-        logPass('TEST 6B: Oversized base64 image string (> 200KB) successfully stripped from storage.');
+      if (resB64.status === 400 && bodyB64.error === 'Oversized Images') {
+        logPass('TEST 6B: Oversized base64 image string (> 200KB) rejected honestly with HTTP 400 (not silently dropped).');
       } else {
-        throw new Error('Oversized base64 was not stripped');
+        throw new Error(`Expected HTTP 400 Oversized Images, got ${resB64.status}: ${JSON.stringify(bodyB64)}`);
       }
 
       passedCount++;
@@ -363,25 +373,69 @@ async function runTests() {
     }
 
     // -----------------------------------------------------------------------
-    // TEST 7: Unpublish Flow (DELETE /api/portfolios/:slug)
+    // TEST 7: Owner Token Security: Authorization on DELETE & In-Place Re-Publishing
     // -----------------------------------------------------------------------
     try {
-      if (!createdSlug) throw new Error('No slug from Test 1');
+      if (!createdSlug || !createdOwnerToken) throw new Error('No slug or owner token from Test 1');
 
-      // Call DELETE
-      const deleteRes = await fetch(`${API_SERVER}/api/portfolios/${createdSlug}`, {
+      // 7A: DELETE without token -> Expect 401 Unauthorized
+      const deleteNoToken = await fetch(`${API_SERVER}/api/portfolios/${createdSlug}`, {
         method: 'DELETE',
       });
-      const deleteBody = await deleteRes.json();
+      if (deleteNoToken.status === 401) {
+        logPass('TEST 7A: DELETE without token correctly rejected with HTTP 401 Unauthorized.');
+      } else {
+        throw new Error(`Expected HTTP 401 for delete without token, got ${deleteNoToken.status}`);
+      }
 
-      if (deleteRes.status !== 200 || !deleteBody.success) {
-        throw new Error(`Unpublish failed: ${deleteRes.status} ${JSON.stringify(deleteBody)}`);
+      // 7B: DELETE with wrong token -> Expect 403 Forbidden
+      const deleteWrongToken = await fetch(`${API_SERVER}/api/portfolios/${createdSlug}`, {
+        method: 'DELETE',
+        headers: { 'X-Owner-Token': 'wrong-token-00000000000000000000000000000000000000000000000000000000' },
+      });
+      if (deleteWrongToken.status === 403) {
+        logPass('TEST 7B: DELETE with incorrect token correctly rejected with HTTP 403 Forbidden.');
+      } else {
+        throw new Error(`Expected HTTP 403 for delete with wrong token, got ${deleteWrongToken.status}`);
+      }
+
+      // 7C: Re-publishing from same browser with same slug & ownerToken -> Updates in-place (200 OK)
+      const updatePayload = {
+        ...mockPortfolio,
+        slug: createdSlug,
+        ownerToken: createdOwnerToken,
+        tagline: 'Updated in-place with owner token authorization.',
+      };
+      const updateRes = await fetch(`${API_SERVER}/api/portfolios`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Owner-Token': createdOwnerToken,
+        },
+        body: JSON.stringify(updatePayload),
+      });
+      const updateBody = await updateRes.json();
+      if (updateRes.status === 200 && updateBody.slug === createdSlug) {
+        logPass(`TEST 7C: Re-publishing with owner token successfully updated existing slug "${createdSlug}" in-place without creating a new file.`);
+      } else {
+        throw new Error(`Expected HTTP 200 for update, got ${updateRes.status}: ${JSON.stringify(updateBody)}`);
+      }
+
+      // 7D: DELETE with correct token -> Succeeds with 200 OK
+      const deleteValidToken = await fetch(`${API_SERVER}/api/portfolios/${createdSlug}`, {
+        method: 'DELETE',
+        headers: { 'X-Owner-Token': createdOwnerToken },
+      });
+      const deleteBody = await deleteValidToken.json();
+
+      if (deleteValidToken.status !== 200 || !deleteBody.success) {
+        throw new Error(`Unpublish with valid token failed: ${deleteValidToken.status} ${JSON.stringify(deleteBody)}`);
       }
 
       // Verify subsequent GET returns 404
       const getAfterDelete = await fetch(`${API_SERVER}/api/portfolios/${createdSlug}`);
       if (getAfterDelete.status === 404) {
-        logPass(`TEST 7: Portfolio "${createdSlug}" unpublished successfully; subsequent fetch returns 404.`);
+        logPass(`TEST 7D: Portfolio "${createdSlug}" unpublished successfully with valid owner token; subsequent fetch returns 404.`);
         passedCount++;
       } else {
         throw new Error(`Expected HTTP 404 after unpublish, got ${getAfterDelete.status}`);

@@ -131,60 +131,78 @@ export const Footer: React.FC<FooterProps> = ({ portfolio }) => {
               SOCIAL NETWORKS // HANDLES
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <a
-                href={sanitizeUrl(portfolio.github || 'https://github.com')}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label={`GitHub profile of ${portfolio.name}`}
-                style={{
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: '0.82rem',
-                  color: 'var(--text-secondary)',
-                  textDecoration: 'none',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                }}
-              >
-                <GithubIcon size={14} />
-                <span>GITHUB // {portfolio.name.toLowerCase().replace(/\s+/g, '')}</span>
-              </a>
-              <a
-                href={sanitizeUrl(portfolio.linkedin || 'https://linkedin.com')}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label={`LinkedIn profile of ${portfolio.name}`}
-                style={{
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: '0.82rem',
-                  color: 'var(--text-secondary)',
-                  textDecoration: 'none',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                }}
-              >
-                <LinkedinIcon size={14} />
-                <span>LINKEDIN // PROFESSIONAL_PROFILE</span>
-              </a>
-              <a
-                href={sanitizeUrl(portfolio.twitter || 'https://x.com')}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label={`Twitter/X profile of ${portfolio.name}`}
-                style={{
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: '0.82rem',
-                  color: 'var(--text-secondary)',
-                  textDecoration: 'none',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                }}
-              >
-                <TwitterIcon size={14} />
-                <span>X // TRANSMISSIONS</span>
-              </a>
+              {portfolio.github && portfolio.github.trim() && (
+                <a
+                  href={sanitizeUrl(portfolio.github)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={`GitHub profile of ${portfolio.name}`}
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '0.82rem',
+                    color: 'var(--text-secondary)',
+                    textDecoration: 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                  }}
+                >
+                  <GithubIcon size={14} />
+                  <span>GITHUB // {portfolio.github.replace(/^https?:\/\/(www\.)?github\.com\/?/i, '').replace(/\/$/, '') || 'PROFILE'}</span>
+                </a>
+              )}
+              {portfolio.linkedin && portfolio.linkedin.trim() && (
+                <a
+                  href={sanitizeUrl(portfolio.linkedin)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={`LinkedIn profile of ${portfolio.name}`}
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '0.82rem',
+                    color: 'var(--text-secondary)',
+                    textDecoration: 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                  }}
+                >
+                  <LinkedinIcon size={14} />
+                  <span>LINKEDIN // {portfolio.linkedin.replace(/^https?:\/\/(www\.)?linkedin\.com\/(in\/)?/i, '').replace(/\/$/, '') || 'PROFILE'}</span>
+                </a>
+              )}
+              {portfolio.twitter && portfolio.twitter.trim() && (
+                <a
+                  href={sanitizeUrl(portfolio.twitter)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={`Twitter/X profile of ${portfolio.name}`}
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '0.82rem',
+                    color: 'var(--text-secondary)',
+                    textDecoration: 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                  }}
+                >
+                  <TwitterIcon size={14} />
+                  <span>X // {portfolio.twitter.replace(/^https?:\/\/(www\.)?(x|twitter)\.com\/?/i, '').replace(/\/$/, '') || 'TRANSMISSIONS'}</span>
+                </a>
+              )}
+              {!portfolio.github?.trim() && !portfolio.linkedin?.trim() && !portfolio.twitter?.trim() && (
+                <span
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '0.78rem',
+                    color: 'var(--text-secondary)',
+                    fontStyle: 'italic',
+                  }}
+                >
+                  NO PUBLIC SOCIAL LINKS CONNECTED
+                </span>
+              )}
             </div>
           </div>
 

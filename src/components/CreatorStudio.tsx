@@ -28,7 +28,13 @@ import {
   Loader2,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { publishPortfolio, unpublishPortfolio } from '../services/portfolioApi';
+import {
+  publishPortfolio,
+  unpublishPortfolio,
+  getStoredOwnerToken,
+  getLastPublishedSlug,
+} from '../services/portfolioApi';
+import { compressPortfolioImages } from '../utils/imageCompressor';
 import { downloadStaticHtmlZip } from '../services/staticExport';
 import type {
   PortfolioData,
@@ -71,7 +77,7 @@ interface CreatorStudioProps {
   onOpenResume?: () => void;
 }
 
-export const CreatorStudio: React.FC<CreatorStudioProps> = ({
+const CreatorStudio: React.FC<CreatorStudioProps> = ({
   isOpen,
   onClose,
   portfolio,
@@ -198,19 +204,43 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
   // Public ZIP State
   const [exportingZip, setExportingZip] = useState(false);
 
-  // Live Cloud Publishing State (Phase 6)
+  // Live Cloud Publishing State (Phase 6 & 7)
   const [publishStatus, setPublishStatus] = useState<'idle' | 'publishing' | 'published' | 'error'>('idle');
   const [publishedSlug, setPublishedSlug] = useState<string | null>(null);
   const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
   const [publishError, setPublishError] = useState<string | null>(null);
+  const [imageWarnings, setImageWarnings] = useState<string[]>([]);
   const [isUnpublishing, setIsUnpublishing] = useState(false);
   const [copiedPublishLink, setCopiedPublishLink] = useState(false);
+
+  // Initialize published slug & owner token from localStorage on open
+  useEffect(() => {
+    if (isOpen) {
+      const savedSlug = getLastPublishedSlug();
+      if (savedSlug && getStoredOwnerToken(savedSlug)) {
+        setPublishedSlug(savedSlug);
+        setPublishedUrl(`${window.location.origin}/p/${savedSlug}`);
+        setPublishStatus('published');
+      }
+    }
+  }, [isOpen]);
 
   const handlePublish = async () => {
     setPublishStatus('publishing');
     setPublishError(null);
+    setImageWarnings([]);
+
     try {
-      const res = await publishPortfolio(currentPortfolio);
+      // 1. Client-side base64 image downscale & compress pass (<200KB)
+      const { compressedPortfolio, warnings } = await compressPortfolioImages(currentPortfolio);
+      if (warnings.length > 0) {
+        setImageWarnings(warnings);
+      }
+
+      // 2. Transmit to server with owner token & existing slug for in-place re-publishing
+      const tokenToUse = publishedSlug ? getStoredOwnerToken(publishedSlug) : null;
+      const res = await publishPortfolio(compressedPortfolio, tokenToUse, publishedSlug);
+
       if (res.success && res.slug) {
         setPublishStatus('published');
         setPublishedSlug(res.slug);
@@ -236,11 +266,13 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
     if (!window.confirm('Are you sure you want to unpublish your live portfolio? The public link will become inactive.')) return;
     setIsUnpublishing(true);
     try {
-      const res = await unpublishPortfolio(publishedSlug);
+      const tokenToUse = getStoredOwnerToken(publishedSlug);
+      const res = await unpublishPortfolio(publishedSlug, tokenToUse);
       if (res.success) {
         setPublishStatus('idle');
         setPublishedSlug(null);
         setPublishedUrl(null);
+        setImageWarnings([]);
       } else {
         alert(res.error || 'Failed to unpublish');
       }
@@ -642,6 +674,8 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
       }}
     >
       <div
+        id="creator-studio-modal"
+        data-testid="creator-studio-modal"
         className="glass-panel"
         style={{
           width: '100%',
@@ -2700,7 +2734,28 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
                       </div>
                     </div>
 
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '4px' }}>
+                    {/* Localhost Host Notice */}
+                    {typeof window !== 'undefined' &&
+                      (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && (
+                        <div
+                          style={{
+                            marginTop: '6px',
+                            padding: '10px 14px',
+                            borderRadius: '8px',
+                            background: 'rgba(245, 158, 11, 0.12)',
+                            border: '1px solid rgba(245, 158, 11, 0.35)',
+                            color: '#fbbf24',
+                            fontSize: '0.78rem',
+                            fontFamily: 'var(--font-mono)',
+                            lineHeight: 1.5,
+                            textAlign: 'left',
+                          }}
+                        >
+                          ℹ️ <strong>Local Hosting Notice:</strong> This link is served from this local computer ({publishedUrl}) and only works on this machine until deployed to a public web host.
+                        </div>
+                      )}
+
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '6px' }}>
                       <button
                         type="button"
                         onClick={handleUnpublish}
@@ -2745,7 +2800,7 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
                       {publishStatus === 'publishing' ? (
                         <>
                           <Loader2 size={16} className="animate-spin" />
-                          <span>DEPLOYING TO CLOUD...</span>
+                          <span>PUBLISHING...</span>
                         </>
                       ) : (
                         <>
@@ -2754,6 +2809,29 @@ export const CreatorStudio: React.FC<CreatorStudioProps> = ({
                         </>
                       )}
                     </button>
+                  </div>
+                )}
+
+                {/* Image Downscale / Compression Warning Notice */}
+                {imageWarnings.length > 0 && (
+                  <div
+                    style={{
+                      marginTop: '12px',
+                      padding: '10px 14px',
+                      borderRadius: '8px',
+                      background: 'rgba(239, 68, 68, 0.12)',
+                      border: '1px solid rgba(239, 68, 68, 0.35)',
+                      color: '#f87171',
+                      fontSize: '0.78rem',
+                      fontFamily: 'var(--font-mono)',
+                      lineHeight: 1.5,
+                      textAlign: 'left',
+                    }}
+                  >
+                    <div style={{ fontWeight: 700, marginBottom: '4px' }}>⚠️ Image Notice:</div>
+                    {imageWarnings.map((w, idx) => (
+                      <div key={idx}>• {w}</div>
+                    ))}
                   </div>
                 )}
               </div>

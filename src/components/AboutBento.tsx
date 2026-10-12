@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import type { PortfolioData } from '../types/portfolio';
 import { getFlattenedSkills } from '../types/portfolioSchema';
+import { sanitizeUrl } from '../utils/sanitize';
 import { FrameScrubber } from './FrameScrubber';
 import { ThreeDImageStage } from './ThreeDImageStage';
 import { TiltCard3D } from './TiltCard3D';
@@ -284,6 +285,32 @@ ${portfolio.publications.map((pb) => `- ${pb.title} | ${pb.publisher} (${pb.date
               >
                 {portfolio.fullBio}
               </p>
+              {(portfolio.github || portfolio.linkedin) && (
+                <div style={{ marginTop: '14px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                  {portfolio.github && (
+                    <a
+                      href={sanitizeUrl(portfolio.github)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="badge-neon"
+                      style={{ textDecoration: 'none', fontSize: '0.72rem', padding: '4px 10px' }}
+                    >
+                      GITHUB &rarr;
+                    </a>
+                  )}
+                  {portfolio.linkedin && (
+                    <a
+                      href={sanitizeUrl(portfolio.linkedin)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="badge-magenta"
+                      style={{ textDecoration: 'none', fontSize: '0.72rem', padding: '4px 10px' }}
+                    >
+                      LINKEDIN &rarr;
+                    </a>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 

@@ -1,20 +1,20 @@
 import JSZip from 'jszip';
-import { saveAs } from 'file-saver';
+import fileSaver from 'file-saver';
+const saveAs = (fileSaver as any)?.saveAs || (fileSaver as any)?.default || fileSaver;
 import type { PortfolioData } from '../types/portfolio';
 import { getFlattenedSkills } from '../types/portfolioSchema';
 import { sanitizeHtmlText, sanitizeUrl } from '../utils/sanitize';
 
 /**
- * Generates and downloads a complete standalone static website ZIP package
- * that works completely offline with inlined CSS, SVGs, and sanitized user data.
+ * Generates the complete standalone static website HTML document.
  */
-export async function downloadStaticHtmlZip(portfolio: PortfolioData): Promise<void> {
-  const zip = new JSZip();
-
+export function generateStaticHtml(portfolio: PortfolioData): string {
   const name = sanitizeHtmlText(portfolio.name || portfolio.profile?.name || 'Engineer');
   const tagline = sanitizeHtmlText(portfolio.tagline || portfolio.profile?.tagline || 'Building innovative systems.');
   const bio = sanitizeHtmlText(portfolio.fullBio || portfolio.summary?.fullBio || portfolio.shortBio || '');
-  const email = sanitizeHtmlText(portfolio.email || portfolio.contact?.email || 'contact@example.com');
+  const rawEmail = portfolio.email || portfolio.contact?.email || '';
+  const email = sanitizeHtmlText(rawEmail || 'contact@example.com');
+  const mailtoHref = rawEmail ? sanitizeUrl(`mailto:${rawEmail}`) : '#';
   const location = sanitizeHtmlText(portfolio.location || portfolio.profile?.location || '');
   const role = sanitizeHtmlText(portfolio.role || portfolio.persona || 'Engineer');
   const discipline = sanitizeHtmlText(portfolio.branchName || portfolio.discipline || 'Engineering');
@@ -28,7 +28,7 @@ export async function downloadStaticHtmlZip(portfolio: PortfolioData): Promise<v
   const experience = portfolio.experience || [];
   const education = portfolio.education || [];
 
-  const htmlContent = `<!DOCTYPE html>
+  return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -306,7 +306,7 @@ export async function downloadStaticHtmlZip(portfolio: PortfolioData): Promise<v
       <div class="card" style="max-width: 600px; margin: 0 auto; text-align: center;">
         <div class="card-title" style="font-size: 1.5rem; margin-bottom: 12px;">Let's Build Together</div>
         <p class="card-desc">Reach out for engineering roles, technical collaboration, or advisory inquiries.</p>
-        <a href="mailto:${email}" class="btn-primary" style="display: inline-block; margin: 12px 0 24px;">SEND TRANSMISSION: ${email}</a>
+        <a href="${mailtoHref}" class="btn-primary" style="display: inline-block; margin: 12px 0 24px;">SEND TRANSMISSION: ${email}</a>
         <div style="display: flex; justify-content: center; gap: 18px; margin-top: 16px;">
           ${githubUrl && githubUrl !== '#' ? `<a href="${githubUrl}" target="_blank" rel="noopener noreferrer" style="color: var(--accent-cyan); text-decoration: none; font-size: 0.85rem; font-family: var(--font-mono);">GitHub &rarr;</a>` : ''}
           ${linkedinUrl && linkedinUrl !== '#' ? `<a href="${linkedinUrl}" target="_blank" rel="noopener noreferrer" style="color: var(--accent-cyan); text-decoration: none; font-size: 0.85rem; font-family: var(--font-mono);">LinkedIn &rarr;</a>` : ''}
@@ -326,6 +326,15 @@ export async function downloadStaticHtmlZip(portfolio: PortfolioData): Promise<v
   </footer>
 </body>
 </html>`;
+}
+
+/**
+ * Downloads a complete standalone static website ZIP package.
+ */
+export async function downloadStaticHtmlZip(portfolio: PortfolioData): Promise<void> {
+  const zip = new JSZip();
+  const name = sanitizeHtmlText(portfolio.name || portfolio.profile?.name || 'Engineer');
+  const htmlContent = generateStaticHtml(portfolio);
 
   const readmeContent = `# ${name} — 3D Portfolio Static Build
 
