@@ -98,6 +98,22 @@ const maliciousPortfolio: any = {
       companyUrl: 'javascript:window.__EVIL_EXP_URL=1',
       bullets: ['Scaled C++ <T> pipelines by 300%', 'Filed 3 R&D patents'],
     },
+    {
+      role: 'Staff Systems Architect',
+      company: 'Vortex Cloud Inc',
+      period: '2019 - 2021',
+      description: 'Zero-copy kernel bypass networking.',
+      companyUrl: '//evil.com/fake-company',
+      bullets: ['DPDK pipeline optimization', 'Sub-microsecond latency'],
+    },
+    {
+      role: 'Senior Kernel Engineer',
+      company: 'Apex Systems',
+      period: '2017 - 2019',
+      description: 'eBPF observability infrastructure.',
+      companyUrl: 'https://example.com/apex-systems',
+      bullets: ['eBPF observability pipeline'],
+    },
   ],
   education: [
     {
@@ -277,9 +293,11 @@ async function runSanitizationProof() {
 
       // Navigate to the published portfolio public page
       await page.goto(`http://localhost:${CLIENT_PORT}/p/${publishedSlug}`, {
-        waitUntil: 'networkidle2',
+        waitUntil: 'domcontentloaded',
         timeout: 20000,
       });
+      await page.waitForSelector('main', { timeout: 15000 });
+      await new Promise((r) => setTimeout(r, 800));
 
       // 1. Verify ZERO XSS payloads executed in window context
       const xssExecutionResults = await page.evaluate(() => {
@@ -354,6 +372,8 @@ async function runSanitizationProof() {
       console.log(`     • Experience links checked: ${linkAudit.experience.links.length}`);
       console.log(`     • Certifications/Publications links checked: ${linkAudit.certificationsPublications.links.length}`);
       console.log(`     • About links checked: ${linkAudit.about.links.length}`);
+
+      assert(linkAudit.experience.links.length > 0, 'Experience section must have checked links > 0');
 
       await browser.close();
 

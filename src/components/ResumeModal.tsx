@@ -23,11 +23,6 @@ import {
   type ResumeTemplateId,
   type ResumeRenderOptions,
 } from '../services/resumeGenerator';
-import {
-  downloadResumePdf,
-  downloadResumeDocx,
-  copyResumePlainText,
-} from '../services/resumeService';
 import { usePortfolioStore } from '../store/portfolioStore';
 
 interface ResumeModalProps {
@@ -145,6 +140,7 @@ export const ResumeModal: React.FC<ResumeModalProps> = ({ portfolio: initialPort
     setDownloadingPdf(true);
     setStatusMessage('Generating publication-quality ATS PDF...');
     try {
+      const { downloadResumePdf } = await import('../services/resumeService');
       const res = await downloadResumePdf(activePortfolio, renderOptions);
       if (res.success) {
         setStatusMessage('PDF downloaded successfully!');
@@ -169,6 +165,7 @@ export const ResumeModal: React.FC<ResumeModalProps> = ({ portfolio: initialPort
     setDownloadingDocx(true);
     setStatusMessage('Generating editable Microsoft Word (.docx)...');
     try {
+      const { downloadResumeDocx } = await import('../services/resumeService');
       const res = await downloadResumeDocx(activePortfolio, renderOptions);
       if (res.success) {
         setStatusMessage('Word document downloaded successfully!');
@@ -184,6 +181,7 @@ export const ResumeModal: React.FC<ResumeModalProps> = ({ portfolio: initialPort
   };
 
   const handleCopyText = async () => {
+    const { copyResumePlainText } = await import('../services/resumeService');
     const success = await copyResumePlainText(activePortfolio);
     if (success) {
       setCopiedText(true);

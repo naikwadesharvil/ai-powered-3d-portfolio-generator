@@ -16,8 +16,6 @@ import { NotFoundPage } from './components/NotFoundPage';
 import { usePortfolioStore } from './store/portfolioStore';
 import { CURATED_THEME_PRESETS, themeTokensToCssVars } from './types/themeTokens';
 import { getPublishedPortfolio } from './services/portfolioApi';
-import CreatorStudio from './components/CreatorStudio';
-import ResumeModal from './components/ResumeModal';
 
 function updateDocumentMeta(p: PortfolioData) {
   const name = p.name || p.profile?.name || 'Engineer';
@@ -56,6 +54,25 @@ export function App() {
 
   const [isStudioOpen, setIsStudioOpen] = useState(false);
   const [isResumeOpen, setIsResumeOpen] = useState(false);
+  const [StudioComponent, setStudioComponent] = useState<React.ComponentType<any> | null>(null);
+  const [ResumeComponent, setResumeComponent] = useState<React.ComponentType<any> | null>(null);
+
+  useEffect(() => {
+    if (isStudioOpen && !StudioComponent) {
+      import('./components/CreatorStudio').then((mod) => {
+        setStudioComponent(() => mod.default);
+      });
+    }
+  }, [isStudioOpen, StudioComponent]);
+
+  useEffect(() => {
+    if (isResumeOpen && !ResumeComponent) {
+      import('./components/ResumeModal').then((mod) => {
+        setResumeComponent(() => mod.default);
+      });
+    }
+  }, [isResumeOpen, ResumeComponent]);
+
   const [previewMode, setPreviewMode] = useState<'desktop' | 'tablet' | 'mobile'>('desktop');
   const [currentPath, setCurrentPath] = useState(
     typeof window !== 'undefined' ? window.location.pathname : '/'
@@ -76,8 +93,6 @@ export function App() {
   const [publicPortfolio, setPublicPortfolio] = useState<PortfolioData | null>(null);
   const [publicLoading, setPublicLoading] = useState<boolean>(isSlugRoute);
   const [publicError, setPublicError] = useState<string | null>(null);
-
-  console.log('[DEBUG App render] isStudioOpen:', isStudioOpen, 'isSlugRoute:', isSlugRoute);
 
   useEffect(() => {
     if (isSlugRoute && currentSlug) {
@@ -271,7 +286,6 @@ export function App() {
             id="launch-studio-btn"
             data-testid="studio-launch-btn"
             onClick={() => {
-              console.log('[DEBUG App] Studio button clicked! Setting isStudioOpen=true');
               setIsStudioOpen(true);
             }}
             style={{
@@ -392,8 +406,8 @@ export function App() {
         <Footer portfolio={activePortfolio} />
       </div>
 
-      {!isSlugRoute && isStudioOpen && (
-        <CreatorStudio
+      {!isSlugRoute && isStudioOpen && StudioComponent && (
+        <StudioComponent
           isOpen={isStudioOpen}
           onClose={() => setIsStudioOpen(false)}
           portfolio={portfolio}
@@ -405,8 +419,8 @@ export function App() {
       )}
 
       {/* Layer B: Professional ATS Resume Studio & Preview Modal */}
-      {isResumeOpen && (
-        <ResumeModal
+      {isResumeOpen && ResumeComponent && (
+        <ResumeComponent
           isOpen={isResumeOpen}
           onClose={() => setIsResumeOpen(false)}
           portfolio={activePortfolio}

@@ -143,6 +143,8 @@ export interface ExperienceItem {
   period?: string;
   location?: string;
   description?: string;
+  companyUrl?: string;
+  link?: string;
   bullets?: string[];
   points?: string[];
   highlights?: string[];
@@ -157,6 +159,8 @@ export const ExperienceSchema: z.ZodType<ExperienceItem> = z.object({
   period: z.string().optional().default('Present'),
   location: z.string().optional().default(''),
   description: z.string().optional().default(''),
+  companyUrl: z.string().optional().default(''),
+  link: z.string().optional().default(''),
   bullets: z.array(z.string()).optional().default([]),
   points: z.array(z.string()).optional().default([]),
   highlights: z.array(z.string()).optional().default([]),
@@ -433,6 +437,8 @@ export function normalizePortfolioData(raw: Partial<PortfolioData> | any): Portf
       period: e.period || 'Present',
       location: e.location || '',
       description: e.description || '',
+      companyUrl: e.companyUrl || e.link || '',
+      link: e.link || e.companyUrl || '',
       bullets,
       points: bullets,
       isVerified: e.isVerified ?? true,

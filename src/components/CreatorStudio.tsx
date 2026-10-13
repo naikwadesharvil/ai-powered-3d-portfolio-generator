@@ -37,7 +37,6 @@ import {
   getLastPublishedSlug,
 } from '../services/portfolioApi';
 import { compressPortfolioImages } from '../utils/imageCompressor';
-import { downloadStaticHtmlZip } from '../services/staticExport';
 import type {
   PortfolioData,
   UserRole,
@@ -60,10 +59,6 @@ import {
   detectResumePlaceholders,
   type ResumeTemplateId,
 } from '../services/resumeGenerator';
-import {
-  downloadResumePdf,
-  downloadResumeDocx,
-} from '../services/resumeService';
 
 import SplitCustomizer from './SplitCustomizer';
 
@@ -88,7 +83,6 @@ const CreatorStudio: React.FC<CreatorStudioProps> = ({
   onChangePreviewMode,
   onOpenResume,
 }) => {
-  console.log('[DEBUG] CreatorStudio component executing!');
   // 4-Step Stepper Flow: Details -> Generate -> Customize -> Download/Publish
   const [currentStep, setCurrentStep] = useState<StepperStep>('details');
   const [history, setHistory] = useState<PortfolioData[]>([portfolio]);
@@ -636,6 +630,7 @@ const CreatorStudio: React.FC<CreatorStudioProps> = ({
   const handleExportZip = async () => {
     setExportingZip(true);
     try {
+      const { downloadStaticHtmlZip } = await import('../services/staticExport');
       await downloadStaticHtmlZip(currentPortfolio);
     } catch (err: any) {
       alert(`Export failed: ${err?.message || 'Error creating ZIP file'}`);
@@ -2563,6 +2558,7 @@ const CreatorStudio: React.FC<CreatorStudioProps> = ({
                         }
                         setStep4ExportingPdf(true);
                         try {
+                          const { downloadResumePdf } = await import('../services/resumeService');
                           await downloadResumePdf(currentPortfolio, {
                             template: step4ResumeTemplate,
                             accentColor: activeThemeTokens?.accentPrimary || '#00f2fe',
@@ -2585,6 +2581,7 @@ const CreatorStudio: React.FC<CreatorStudioProps> = ({
                         }
                         setStep4ExportingDocx(true);
                         try {
+                          const { downloadResumeDocx } = await import('../services/resumeService');
                           await downloadResumeDocx(currentPortfolio, {
                             template: step4ResumeTemplate,
                             accentColor: activeThemeTokens?.accentPrimary || '#00f2fe',
@@ -2896,7 +2893,7 @@ const CreatorStudio: React.FC<CreatorStudioProps> = ({
                             textAlign: 'left',
                           }}
                         >
-                          ℹ️ <strong>Local Hosting Notice:</strong> This link is served from this local computer ({publishedUrl}) and only works on this machine until deployed to a public web host.
+                          ℹ️ <strong>Local Hosting Notice:</strong> This link works only on this computer ({publishedUrl}) unless you host the app.
                         </div>
                       )}
 

@@ -6,7 +6,7 @@ const CLIENT_PORT = 5173;
 
 async function runStudioRegressionTest() {
   console.log('===============================================================');
-  console.log('🧪 Lazy CreatorStudio & 4-Step Stepper Flow Regression Test');
+  console.log('🧪 CreatorStudio & 4-Step Stepper Flow Regression Test');
   console.log('===============================================================\n');
 
   const browser = await puppeteer.launch({
@@ -51,10 +51,10 @@ async function runStudioRegressionTest() {
     await page.waitForSelector('#launch-studio-btn', { visible: true, timeout: 10000 });
     await page.click('#launch-studio-btn');
 
-    // 3. Wait for Lazy CreatorStudio to suspend, load chunk, and mount
-    console.log('Waiting for lazy CreatorStudio modal chunk to mount (#creator-studio-modal)...');
+    // 3. Wait for CreatorStudio modal to mount
+    console.log('Waiting for CreatorStudio modal to mount (#creator-studio-modal)...');
     await page.waitForSelector('#creator-studio-modal', { visible: true, timeout: 20000 });
-    console.log('  ✅ [PASS] Lazy CreatorStudio opened and mounted with Suspense boundary.');
+    console.log('  ✅ [PASS] CreatorStudio opened and mounted successfully.');
 
     // 4. Verify Step 1: Details
     console.log('Checking Step 1 (Details)...');
@@ -84,8 +84,8 @@ async function runStudioRegressionTest() {
     assert(step2Active, 'Step 2 (Generate) must display AI synthesis options');
     console.log('  ✅ [PASS] Step 2 (Generate) active.');
 
-    // 6. Navigate to Step 3: Customize (Lazy SplitCustomizer)
-    console.log('Navigating to Step 3 (Customize with Lazy SplitCustomizer)...');
+    // 6. Navigate to Step 3: Customize (SplitCustomizer)
+    console.log('Navigating to Step 3 (Customize with SplitCustomizer)...');
     await page.evaluate(() => {
       const tabs = Array.from(document.querySelectorAll('.stepper-container button[role="tab"]'));
       if (tabs[2]) tabs[2].click();

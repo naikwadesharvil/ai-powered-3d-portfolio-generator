@@ -294,6 +294,9 @@ export const SectionSortableItem: React.FC<SectionSortableItemProps> = ({
           {/* Expand/Collapse Toggle Button */}
           <button
             type="button"
+            className="section-expand-toggle-btn"
+            data-testid={`expand-section-${id}`}
+            aria-label={`Toggle inline edit for ${label}`}
             onClick={() => setIsExpanded(!isExpanded)}
             style={{
               background: 'transparent',
@@ -340,10 +343,15 @@ export const SectionSortableItem: React.FC<SectionSortableItemProps> = ({
               </label>
               <input
                 type="text"
+                data-testid={`input-${id}-tagline`}
                 value={portfolio.tagline}
                 onChange={(e) => {
                   measureKeystrokePaint();
                   updateSectionField('tagline', e.target.value);
+                }}
+                onInput={(e) => {
+                  measureKeystrokePaint();
+                  updateSectionField('tagline', (e.target as HTMLInputElement).value);
                 }}
                 style={{
                   width: '100%',

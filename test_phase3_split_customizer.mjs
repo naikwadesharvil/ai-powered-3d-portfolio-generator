@@ -62,22 +62,32 @@ async function testPhase3() {
     console.log('\n--- 2. Testing Keystroke-to-Paint Latency (< 100ms) ---');
     // Expand first section item
     await page.evaluate(() => {
-      const expandBtns = Array.from(document.querySelectorAll('.split-editor-panel button'));
-      const chevron = expandBtns.find(b => b.querySelector('svg.lucide-chevron-down'));
-      if (chevron) chevron.click();
+      const toggle = document.querySelector('.section-expand-toggle-btn') ||
+        Array.from(document.querySelectorAll('.split-editor-panel button')).find(
+          (b) => !b.getAttribute('aria-label')?.includes('Move') && b.querySelector('svg.lucide-chevron-down')
+        );
+      if (toggle) toggle.click();
     });
-    await new Promise(r => setTimeout(r, 400));
+    await new Promise((r) => setTimeout(r, 400));
 
     const paintLatency = await page.evaluate(async () => {
       return new Promise((resolve) => {
         const inputs = Array.from(document.querySelectorAll('.split-editor-panel input[type="text"]'));
         if (inputs.length > 0) {
+          const input = inputs[0];
+          input.focus();
           const t0 = performance.now();
-          inputs[0].value = 'Lead Autonomous Roboticist & Pioneer';
-          inputs[0].dispatchEvent(new Event('input', { bubbles: true }));
-          inputs[0].dispatchEvent(new Event('change', { bubbles: true }));
+          const targetText = 'Lead Autonomous Roboticist & Pioneer';
+          const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+          if (nativeSetter) {
+            nativeSetter.call(input, targetText);
+          } else {
+            input.value = targetText;
+          }
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+          input.dispatchEvent(new Event('change', { bubbles: true }));
 
-          // Double rAF measures when the browser has scheduled, laid out, and painted the frame
+          // Double requestAnimationFrame guarantees measuring after browser layout and paint
           requestAnimationFrame(() => {
             requestAnimationFrame(() => {
               const elapsed = performance.now() - t0;
@@ -85,16 +95,26 @@ async function testPhase3() {
             });
           });
         } else {
-          resolve(0);
+          resolve(-1);
         }
       });
     });
 
     // Check preview content update
     const updatedInPreview = await page.evaluate(() => {
-      return document.querySelector('.split-preview-panel')?.textContent?.includes('Lead Autonomous Roboticist & Pioneer');
+      return document.querySelector('.split-preview-panel')?.textContent?.includes('Lead Autonomous Roboticist & Pioneer') === true;
     });
-    console.log(`✅ [PASS] Keystroke-to-paint latency: ${paintLatency}ms (< 100ms benchmark met: ${paintLatency < 100})`);
+
+    if (!updatedInPreview) {
+      console.error('❌ [FAIL] Live preview did NOT reflect edit on painted frame!');
+      throw new Error('Live preview failed to reflect edit on painted frame');
+    }
+    if (paintLatency <= 0 || paintLatency >= 100) {
+      console.error(`❌ [FAIL] Keystroke-to-paint latency benchmark not met: ${paintLatency}ms`);
+      throw new Error(`Keystroke-to-paint latency failed benchmark: ${paintLatency}ms`);
+    }
+
+    console.log(`✅ [PASS] Keystroke-to-paint latency: ${paintLatency}ms (< 100ms benchmark met: true)`);
     console.log(`✅ [PASS] Live preview reflects edit on painted frame: ${updatedInPreview}`);
 
     // Test 3: Theme Tokens & CSS Variables

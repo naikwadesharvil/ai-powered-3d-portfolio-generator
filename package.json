@@ -16,7 +16,7 @@
     "test:resume": "node test_resume_export.mjs && node test_resume_edge_cases_and_inspect.mjs",
     "test:phase3": "node test_phase3_split_customizer.mjs",
     "test:all": "node test_verification.mjs && node test_server_ai.mjs && node test_resume_export.mjs && node test_resume_edge_cases_and_inspect.mjs && node test_phase3_split_customizer.mjs",
-    "verify": "npm run test:all && node test_phase5_followups.mjs && node test_phase6_publish.mjs && npx tsx test_sanitization_proof.ts && node test_studio_regression.mjs"
+    "verify": "node scripts/run_verify.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
