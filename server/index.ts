@@ -4,11 +4,11 @@ import dotenv from 'dotenv';
 
 // Load environment variables from server/.env if present, or root .env
 if (fs.existsSync(path.resolve('server/.env'))) {
-  dotenv.config({ path: path.resolve('server/.env') });
+  dotenv.config({ path: path.resolve('server/.env'), override: true });
 } else if (fs.existsSync(path.resolve('.env'))) {
-  dotenv.config({ path: path.resolve('.env') });
+  dotenv.config({ path: path.resolve('.env'), override: true });
 } else {
-  dotenv.config();
+  dotenv.config({ override: true });
 }
 
 import express, { Request, Response, NextFunction } from 'express';
@@ -20,6 +20,7 @@ import { aiRouter } from './routes/ai.js';
 import { resumeRouter } from './routes/resume.js';
 import { portfoliosRouter } from './routes/portfolios.js';
 import { OpenAiService } from './services/openaiService.js';
+import { portfolioStorage } from './services/portfolioStorage.js';
 
 const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 5000;
@@ -47,6 +48,8 @@ export const CORS_ALLOWED_ORIGINS = Array.from(
     'http://127.0.0.1:5173',
     'http://localhost:5000',
     'http://127.0.0.1:5000',
+    `http://localhost:${PORT}`,
+    `http://127.0.0.1:${PORT}`,
     ...configuredOrigins,
   ])
 );
@@ -144,14 +147,34 @@ if (fs.existsSync(distPath)) {
   app.use(express.static(distPath));
 
   // SPA fallback for client-side routing (e.g., /p/:slug refresh support)
-  app.use((req: Request, res: Response, next: NextFunction) => {
+  app.use(async (req: Request, res: Response, next: NextFunction) => {
     if (req.method !== 'GET' || req.path.startsWith('/api')) return next();
     const indexHtml = path.join(distPath, 'index.html');
-    if (fs.existsSync(indexHtml)) {
-      res.sendFile(indexHtml);
-    } else {
-      next();
+    if (!fs.existsSync(indexHtml)) return next();
+
+    const match = req.path.match(/^\/p\/([^/]+)$/);
+    if (match) {
+      const slug = match[1];
+      try {
+        const record = await portfolioStorage.get(slug);
+        if (record && record.data) {
+          let html = fs.readFileSync(indexHtml, 'utf-8');
+          if (record.data.noIndex) {
+            html = html.replace('</head>', '  <meta name="robots" content="noindex, nofollow" />\n</head>');
+          }
+          if (record.data.name) {
+            const pageTitle = `${record.data.name} | 3D Interactive Portfolio`;
+            html = html.replace(/<title>.*?<\/title>/, `<title>${pageTitle}</title>`);
+          }
+          res.setHeader('Content-Type', 'text/html; charset=utf-8');
+          return res.send(html);
+        }
+      } catch {
+        // Fallback to default index.html
+      }
     }
+
+    res.sendFile(indexHtml);
   });
 } else {
   // Informational endpoint when dist/ has not been built

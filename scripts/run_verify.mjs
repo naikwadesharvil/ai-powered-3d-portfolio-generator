@@ -124,6 +124,10 @@ async function main() {
       { name: 'test_phase5_followups.mjs', cmd: 'node test_phase5_followups.mjs' },
       { name: 'test_phase6_publish.mjs', cmd: 'node test_phase6_publish.mjs' },
       { name: 'test_sanitization_proof.ts', cmd: 'npx tsx test_sanitization_proof.ts' },
+      { name: 'test_7a_single_process.mjs', cmd: 'node test_7a_single_process.mjs' },
+      { name: 'test_7b_sqlite_storage.mjs', cmd: 'npx tsx test_7b_sqlite_storage.mjs' },
+      { name: 'test_7c_privacy_and_cost.mjs', cmd: 'npx tsx test_7c_privacy_and_cost.mjs' },
+      { name: 'test_7c_browser_studio_privacy.mjs', cmd: 'node test_7c_browser_studio_privacy.mjs' },
       { name: 'test_studio_regression.mjs', cmd: 'node test_studio_regression.mjs' },
     ];
 

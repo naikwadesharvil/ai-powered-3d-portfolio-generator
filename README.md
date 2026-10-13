@@ -18,7 +18,7 @@
 
 ### 2. Live Split-Screen Customizer (`src/components/SplitCustomizer.tsx`)
 - **Instant Dual-Pane Studio**: Side-by-side rich form editor on the left and live responsive portfolio preview on the right.
-- **Ultra-Fast Sub-10ms Reactivity**: Instant re-renders as fields are edited, measured via `requestAnimationFrame`, with debounced `localStorage` autosave drafts.
+- **Sub-100ms Split-Screen Reactivity**: Instant re-renders as fields are edited (under 100ms, measured at about 60-80ms via `requestAnimationFrame`), with debounced `localStorage` autosave drafts.
 - **Drag-and-Drop Section Reordering**: Powered by `@dnd-kit/sortable` for intuitive section sequence customization.
 - **Theme Token Customizer**: Granular control over accent colors, background palettes, glass card opacities, and typography variables with live CSS variable injection.
 - **Responsive Viewport Controls**: 1-click toggling between **Desktop (1280px)**, **Tablet (768px)**, and **Mobile (360px)** viewports with dedicated tab navigation on mobile.
@@ -36,7 +36,7 @@
 - **Security & Protection Layer**:
   - Helmet security headers with restrictive CSP policies
   - Generic IP rate limiting (200 requests per 15 min)
-  - Daily per-IP and global cost caps on OpenAI endpoints (`OPENAI_DAILY_CAP_IP` and `OPENAI_DAILY_CAP_GLOBAL`) with clean offline fallbacks and secret-free logging
+  - Daily per-IP and global cost caps on OpenAI endpoints (`OPENAI_DAILY_CAP_IP` and `OPENAI_DAILY_CAP_GLOBAL`) with clean offline fallbacks and secret-free logging (Note: Daily AI caps are tracked in-memory and reset on process restart or daily at 00:00 UTC)
   - Strict CORS origin filtering
   - Zod schema validation with field-level client/server error mapping
   - Payload size limits and prompt injection guards
@@ -93,7 +93,7 @@
 ## 🚀 Getting Started & Setup
 
 ### Prerequisites
-- Node.js `v20+` or `v22+` / `v24+`
+- Node.js `v22.5.0+` (minimum version required by native `node:sqlite` DatabaseSync module; declared in `package.json` under `"engines": { "node": ">=22.5.0" }`)
 - npm `v10+` or `v11+`
 
 ### 1. Installation
@@ -206,12 +206,20 @@ The application includes an extensive regression and verification suite:
    - Verifies PDF binary structure, OpenXML DOCX archive hierarchy (`word/document.xml`, `[Content_Types].xml`), plaintext parsing, markdown layout, page breaks, and orphan prevention.
 4. **Split Customizer Performance Suite (`test_phase3_split_customizer.mjs`)**:
    - Runs headless browser checks validating sub-100ms keystroke-to-paint updates measured via `requestAnimationFrame`, CSS variable injection, section reordering, and responsive viewports.
-5. **Publishing & Storage Suite (`test_publishing_and_security.mjs`)**:
-   - Tests SQLite persistence, slug collision handling, timing-safe SHA-256 owner secret verification, JSON migration, and unauthorized mutation rejection.
-6. **Privacy & Cost Suite (`scratch/test_7c_privacy_and_cost.mjs`)**:
+5. **Publishing & Security Suite (`test_phase6_publish.mjs`)**:
+   - Tests slug creation, timing-safe SHA-256 owner token verification, and payload size guards.
+6. **Output Sanitization Proof (`test_sanitization_proof.ts`)**:
+   - Strict audit proving zero XSS vulnerabilities across all 6 link-rendering components.
+7. **Single Process Production Suite (`test_7a_single_process.mjs`)**:
+   - Validates Express serving static dist assets, `/api` endpoints, and SPA refresh fallback for `/p/:slug`.
+8. **SQLite Storage & Migration Suite (`test_7b_sqlite_storage.mjs`)**:
+   - Tests SQLite persistence, record updates, legacy JSON auto-migration, and `.gitignore` safety.
+9. **Privacy & Cost Suite (`test_7c_privacy_and_cost.mjs`)**:
    - Tests per-portfolio privacy toggles (`hidePhone`, `hideEmail`, `noIndex`), pre-publish warning notices, daily per-IP and global caps, offline fallbacks, and public API data redaction.
-7. **Studio Regression Suite (`test_studio_regression.mjs`)**:
-   - End-to-end browser walkthrough testing the entire user journey: entering the studio, generating with AI, customizing fields, verifying 3D hero rendering, testing scrubbers and vintage telephone visuals, and publishing to a live vanity slug.
+10. **Browser Studio Privacy UI Suite (`test_7c_browser_studio_privacy.mjs`)**:
+    - Headless browser validation verifying Step 4 notice and interactive toggle activation in live client UI.
+11. **Studio Regression Suite (`test_studio_regression.mjs`)**:
+    - End-to-end browser walkthrough testing the entire user journey: entering the studio, generating with AI, customizing fields, verifying 3D hero rendering, testing scrubbers and vintage telephone visuals, and publishing to a live vanity slug.
 
 To run the complete automated test suite:
 ```bash
@@ -221,6 +229,8 @@ npm run verify
 ---
 
 ## ☁️ Deployment Guide
+
+> **Deployment Notice**: These deployment instructions are untested; no deployment was performed.
 
 The application is structured as a **single production process** where Express serves both the backend API and the static frontend build.
 
