@@ -5,6 +5,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { PortfolioDataSchema, normalizePortfolioData } from '../schemas/portfolioSchema.js';
+import { portfolioStorage } from '../services/portfolioStorage.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -163,8 +164,8 @@ portfoliosRouter.post('/', portfolioPublishLimiter, async (req: Request, res: Re
         });
       }
 
-      const filePath = path.join(STORAGE_DIR, `${requestedSlug}.json`);
-      if (!fs.existsSync(filePath)) {
+      const existingRecord = await portfolioStorage.get(requestedSlug);
+      if (!existingRecord) {
         return res.status(404).json({
           success: false,
           error: 'Not Found',
@@ -180,7 +181,6 @@ portfoliosRouter.post('/', portfolioPublishLimiter, async (req: Request, res: Re
         });
       }
 
-      const existingRecord = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
       if (!verifyOwnerToken(providedOwnerToken, existingRecord.ownerTokenHash)) {
         return res.status(403).json({
           success: false,
@@ -206,22 +206,18 @@ portfoliosRouter.post('/', portfolioPublishLimiter, async (req: Request, res: Re
       }
 
       // Update existing portfolio in-place, keeping the same slug and ownerTokenHash
-      const updatedPortfolio = {
-        ...parseResult.data,
-        slug: requestedSlug,
-        ownerTokenHash: existingRecord.ownerTokenHash,
-        publishedAt: existingRecord.publishedAt || new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-
-      fs.writeFileSync(filePath, JSON.stringify(updatedPortfolio, null, 2), 'utf-8');
+      const updatedRecord = await portfolioStorage.update(
+        requestedSlug,
+        existingRecord.ownerTokenHash,
+        parseResult.data
+      );
 
       return res.status(200).json({
         success: true,
         slug: requestedSlug,
         ownerToken: providedOwnerToken,
         url: `/p/${requestedSlug}`,
-        publishedAt: updatedPortfolio.updatedAt,
+        publishedAt: updatedRecord?.updatedAt || new Date().toISOString(),
         message: 'Portfolio updated successfully.',
       });
     }
@@ -247,22 +243,18 @@ portfoliosRouter.post('/', portfolioPublishLimiter, async (req: Request, res: Re
     const ownerToken = crypto.randomBytes(32).toString('hex');
     const ownerTokenHash = crypto.createHash('sha256').update(ownerToken).digest('hex');
 
-    const filePath = path.join(STORAGE_DIR, `${slug}.json`);
-    const portfolioToSave = {
-      ...validatedData,
+    const savedRecord = await portfolioStorage.save(
       slug,
       ownerTokenHash,
-      publishedAt: new Date().toISOString(),
-    };
-
-    fs.writeFileSync(filePath, JSON.stringify(portfolioToSave, null, 2), 'utf-8');
+      validatedData
+    );
 
     return res.status(201).json({
       success: true,
       slug,
       ownerToken, // Returned ONLY to the author upon creation
       url: `/p/${slug}`,
-      publishedAt: portfolioToSave.publishedAt,
+      publishedAt: savedRecord.publishedAt,
       message: 'Portfolio published successfully.',
     });
   } catch (err: any) {
@@ -292,9 +284,9 @@ portfoliosRouter.get('/:slug', async (req: Request, res: Response) => {
       });
     }
 
-    const filePath = path.join(STORAGE_DIR, `${slug}.json`);
+    const record = await portfolioStorage.get(slug);
 
-    if (!fs.existsSync(filePath)) {
+    if (!record) {
       return res.status(404).json({
         success: false,
         error: 'Not Found',
@@ -302,11 +294,14 @@ portfoliosRouter.get('/:slug', async (req: Request, res: Response) => {
       });
     }
 
-    const fileContent = fs.readFileSync(filePath, 'utf-8');
-    const portfolio = JSON.parse(fileContent);
-
     // Security: Strip private owner token hash before returning public read-only record
-    const { ownerTokenHash: _removed, ...publicPortfolio } = portfolio;
+    const publicPortfolio = {
+      ...record.data,
+      slug: record.slug,
+      publishedAt: record.publishedAt,
+      updatedAt: record.updatedAt,
+    };
+    delete (publicPortfolio as any).ownerTokenHash;
 
     return res.json({
       success: true,
@@ -351,9 +346,9 @@ portfoliosRouter.delete('/:slug', portfolioPublishLimiter, async (req: Request, 
       });
     }
 
-    const filePath = path.join(STORAGE_DIR, `${slug}.json`);
+    const record = await portfolioStorage.get(slug);
 
-    if (!fs.existsSync(filePath)) {
+    if (!record) {
       return res.status(404).json({
         success: false,
         error: 'Not Found',
@@ -361,10 +356,7 @@ portfoliosRouter.delete('/:slug', portfolioPublishLimiter, async (req: Request, 
       });
     }
 
-    const fileContent = fs.readFileSync(filePath, 'utf-8');
-    const portfolio = JSON.parse(fileContent);
-
-    if (!verifyOwnerToken(providedOwnerToken, portfolio.ownerTokenHash)) {
+    if (!verifyOwnerToken(providedOwnerToken, record.ownerTokenHash)) {
       return res.status(403).json({
         success: false,
         error: 'Forbidden',
@@ -372,7 +364,7 @@ portfoliosRouter.delete('/:slug', portfolioPublishLimiter, async (req: Request, 
       });
     }
 
-    fs.unlinkSync(filePath);
+    await portfolioStorage.delete(slug);
 
     return res.json({
       success: true,

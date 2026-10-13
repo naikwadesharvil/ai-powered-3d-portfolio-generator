@@ -40,6 +40,10 @@ test_output_*.png
 test_output_*.pdf
 test_output_*.docx
 
-# Runtime portfolio JSON storage
+# Runtime portfolio storage (JSON and SQLite databases)
 server/data/**/*.json
+server/data/**/*.db*
+*.db
+*.sqlite
+*.sqlite3
 !server/data/**/.gitkeep
