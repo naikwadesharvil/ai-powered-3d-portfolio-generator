@@ -1,6 +1,15 @@
+import fs from 'fs';
+import path from 'path';
 import dotenv from 'dotenv';
-// Load environment variables from server/.env if present
-dotenv.config();
+
+// Load environment variables from server/.env if present, or root .env
+if (fs.existsSync(path.resolve('server/.env'))) {
+  dotenv.config({ path: path.resolve('server/.env') });
+} else if (fs.existsSync(path.resolve('.env'))) {
+  dotenv.config({ path: path.resolve('.env') });
+} else {
+  dotenv.config();
+}
 
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
@@ -128,16 +137,44 @@ app.use('/api/ai', aiRouter);
 app.use('/api/resume', resumeRouter);
 app.use('/api/portfolios', portfoliosRouter);
 
-// Root informational endpoint
-app.get('/', (_req: Request, res: Response) => {
-  res.json({
-    success: true,
-    service: 'AI-Powered 3D Portfolio Generator Backend',
-    version: '2.0.0',
-    status: 'online',
-    openAiConfigured: OpenAiService.isOpenAiConfigured(),
-    model: OpenAiService.isOpenAiConfigured() ? OpenAiService.getModel() : 'offline_fallback',
-    healthCheck: '/api/health',
+// Production Static Assets & SPA Fallback
+const distPath = path.resolve(process.env.DIST_PATH || 'dist');
+if (fs.existsSync(distPath)) {
+  // Serve static assets from dist/
+  app.use(express.static(distPath));
+
+  // SPA fallback for client-side routing (e.g., /p/:slug refresh support)
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    if (req.method !== 'GET' || req.path.startsWith('/api')) return next();
+    const indexHtml = path.join(distPath, 'index.html');
+    if (fs.existsSync(indexHtml)) {
+      res.sendFile(indexHtml);
+    } else {
+      next();
+    }
+  });
+} else {
+  // Informational endpoint when dist/ has not been built
+  app.get('/', (_req: Request, res: Response) => {
+    res.json({
+      success: true,
+      service: 'AI-Powered 3D Portfolio Generator Backend',
+      version: '2.0.0',
+      status: 'online',
+      openAiConfigured: OpenAiService.isOpenAiConfigured(),
+      model: OpenAiService.isOpenAiConfigured() ? OpenAiService.getModel() : 'offline_fallback',
+      healthCheck: '/api/health',
+      notice: 'Production bundle not found in dist/. Run `npm run build` to serve the full web client.',
+    });
+  });
+}
+
+// Strict 404 for unknown /api routes (preventing HTML fallback on failed API calls)
+app.use('/api', (req: Request, res: Response) => {
+  res.status(404).json({
+    success: false,
+    error: 'Not Found',
+    message: `API endpoint ${req.method} ${req.path} does not exist.`,
   });
 });
 
