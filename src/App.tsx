@@ -45,6 +45,20 @@ function updateDocumentMeta(p: PortfolioData) {
   setMeta('og:description', bio, true);
   setMeta('og:url', window.location.href, true);
   setMeta('og:type', 'website', true);
+
+  // Search engine indexing policy (Phase 7c)
+  const isNoIndex = Boolean(p.noIndex ?? p.privacy?.noIndex);
+  let robotsTag = document.querySelector('meta[name="robots"]') as HTMLMetaElement | null;
+  if (isNoIndex) {
+    if (!robotsTag) {
+      robotsTag = document.createElement('meta');
+      robotsTag.setAttribute('name', 'robots');
+      document.head.appendChild(robotsTag);
+    }
+    robotsTag.content = 'noindex, nofollow';
+  } else if (robotsTag) {
+    robotsTag.remove();
+  }
 }
 
 export function App() {

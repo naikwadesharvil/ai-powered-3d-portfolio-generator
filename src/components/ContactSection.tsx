@@ -190,43 +190,45 @@ export const ContactSection: React.FC<ContactSectionProps> = ({ portfolio }) => 
               </p>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                <a
-                  href={sanitizeUrl(`mailto:${portfolio.email}`)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '14px',
-                    color: '#ffffff',
-                    textDecoration: 'none',
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: '0.88rem',
-                    transition: 'color 0.2s ease',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.color = 'var(--accent-cyan)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.color = '#ffffff';
-                  }}
-                >
-                  <div
+                {!portfolio.hideEmail && portfolio.email && (
+                  <a
+                    href={sanitizeUrl(`mailto:${portfolio.email}`)}
                     style={{
-                      width: '40px',
-                      height: '40px',
-                      borderRadius: '8px',
-                      background: 'rgba(0, 242, 254, 0.1)',
-                      border: '1px solid rgba(0, 242, 254, 0.3)',
                       display: 'flex',
                       alignItems: 'center',
-                      justifyContent: 'center',
+                      gap: '14px',
+                      color: '#ffffff',
+                      textDecoration: 'none',
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: '0.88rem',
+                      transition: 'color 0.2s ease',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.color = 'var(--accent-cyan)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.color = '#ffffff';
                     }}
                   >
-                    <Mail size={18} color="var(--accent-cyan)" />
-                  </div>
-                  <span>{portfolio.email}</span>
-                </a>
+                    <div
+                      style={{
+                        width: '40px',
+                        height: '40px',
+                        borderRadius: '8px',
+                        background: 'rgba(0, 242, 254, 0.1)',
+                        border: '1px solid rgba(0, 242, 254, 0.3)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Mail size={18} color="var(--accent-cyan)" />
+                    </div>
+                    <span>{portfolio.email}</span>
+                  </a>
+                )}
 
-                {portfolio.phone && (
+                {!portfolio.hidePhone && portfolio.phone && (
                   <div
                     style={{
                       display: 'flex',

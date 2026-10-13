@@ -27,6 +27,7 @@ import {
   ExternalLink,
   Loader2,
   Key,
+  Eye,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import {
@@ -104,6 +105,7 @@ const CreatorStudio: React.FC<CreatorStudioProps> = ({
   const [step4ExportingDocx, setStep4ExportingDocx] = useState(false);
   const activeThemeTokens = usePortfolioStore((s) => s.themeTokens);
   const currentPortfolio = usePortfolioStore((s) => s.portfolio) || portfolio;
+  const updateSectionField = usePortfolioStore((s) => s.updateSectionField);
 
   const step4Placeholders = React.useMemo(
     () => detectResumePlaceholders(currentPortfolio),
@@ -2660,6 +2662,113 @@ const CreatorStudio: React.FC<CreatorStudioProps> = ({
                 <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: 1.4, margin: 0 }}>
                   Deploy your portfolio to a persistent, unguessable public URL (<code style={{ color: 'var(--accent-cyan)' }}>/p/:slug</code>) that anyone can visit with zero studio UI.
                 </p>
+
+                {/* Pre-Publish Privacy Notice (Phase 7c) */}
+                <div
+                  id="publish-privacy-notice"
+                  style={{
+                    padding: '10px 14px',
+                    borderRadius: '8px',
+                    background: 'rgba(59, 130, 246, 0.1)',
+                    border: '1px solid rgba(59, 130, 246, 0.3)',
+                    color: '#93c5fd',
+                    fontSize: '0.78rem',
+                    fontFamily: 'var(--font-mono)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                  }}
+                >
+                  <Eye size={15} style={{ flexShrink: 0 }} />
+                  <span>Notice: Anyone with the link can view this portfolio once published.</span>
+                </div>
+
+                {/* Per-Portfolio Privacy & Search Engine Indexing Settings (Phase 7c) */}
+                <div
+                  id="publish-privacy-toggles"
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '10px',
+                    padding: '12px 14px',
+                    borderRadius: '8px',
+                    background: 'rgba(255, 255, 255, 0.03)',
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: '0.74rem',
+                      fontFamily: 'var(--font-mono)',
+                      color: 'var(--accent-cyan)',
+                      fontWeight: 700,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.05em',
+                    }}
+                  >
+                    Privacy & Indexing Settings
+                  </div>
+
+                  <label
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      cursor: 'pointer',
+                      fontSize: '0.8rem',
+                      color: '#ffffff',
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      id="toggle-hide-phone"
+                      checked={Boolean(currentPortfolio.hidePhone)}
+                      onChange={(e) => updateSectionField('hidePhone', e.target.checked)}
+                      style={{ accentColor: 'var(--accent-cyan)', cursor: 'pointer' }}
+                    />
+                    <span>Hide phone</span>
+                  </label>
+
+                  <label
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      cursor: 'pointer',
+                      fontSize: '0.8rem',
+                      color: '#ffffff',
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      id="toggle-hide-email"
+                      checked={Boolean(currentPortfolio.hideEmail)}
+                      onChange={(e) => updateSectionField('hideEmail', e.target.checked)}
+                      style={{ accentColor: 'var(--accent-cyan)', cursor: 'pointer' }}
+                    />
+                    <span>Hide email</span>
+                  </label>
+
+                  <label
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      cursor: 'pointer',
+                      fontSize: '0.8rem',
+                      color: '#ffffff',
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      id="toggle-no-index"
+                      checked={Boolean(currentPortfolio.noIndex)}
+                      onChange={(e) => updateSectionField('noIndex', e.target.checked)}
+                      style={{ accentColor: 'var(--accent-cyan)', cursor: 'pointer' }}
+                    />
+                    <span>Don't index this page</span>
+                  </label>
+                </div>
 
                 {/* One-time Owner Token Display Banner */}
                 {newlyIssuedToken && (

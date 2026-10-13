@@ -72,6 +72,13 @@ export const ContactSchema = z.object({
 });
 export type Contact = z.infer<typeof ContactSchema>;
 
+export const PrivacySettingsSchema = z.object({
+  hidePhone: z.boolean().default(false),
+  hideEmail: z.boolean().default(false),
+  noIndex: z.boolean().default(false),
+});
+export type PrivacySettings = z.infer<typeof PrivacySettingsSchema>;
+
 // ============================================================================
 // 3. Skills Sub-Schema (Grouped & Individual)
 // ============================================================================
@@ -378,6 +385,16 @@ export const PortfolioDataSchema = z.object({
     'contact',
   ]),
   hero3DMode: Hero3DModeSchema.optional().default('kinetic_360'),
+
+  // Privacy & Search Engine Indexing Settings (Phase 7c)
+  hidePhone: z.boolean().optional().default(false),
+  hideEmail: z.boolean().optional().default(false),
+  noIndex: z.boolean().optional().default(false),
+  privacy: PrivacySettingsSchema.optional().default({
+    hidePhone: false,
+    hideEmail: false,
+    noIndex: false,
+  }),
 });
 
 export type PortfolioData = z.infer<typeof PortfolioDataSchema>;
@@ -402,6 +419,11 @@ export function normalizePortfolioData(raw: Partial<PortfolioData> | any): Portf
   const fullBioVal = raw.fullBio || raw.summary?.fullBio || shortBioVal;
   const disciplineVal = raw.discipline || raw.branch || 'cs_it';
   const disciplineNameVal = raw.disciplineName || raw.branchName || '';
+
+  // Privacy settings
+  const hidePhoneVal = Boolean(raw.hidePhone ?? raw.privacy?.hidePhone ?? false);
+  const hideEmailVal = Boolean(raw.hideEmail ?? raw.privacy?.hideEmail ?? false);
+  const noIndexVal = Boolean(raw.noIndex ?? raw.privacy?.noIndex ?? false);
 
   // Normalize projects (ensure bullets and tools are arrays)
   const projectsVal: Project[] = (raw.projects || []).map((p: any, idx: number) => {
@@ -553,6 +575,14 @@ export function normalizePortfolioData(raw: Partial<PortfolioData> | any): Portf
     sectionVisibility,
     sectionOrder,
     hero3DMode: raw.hero3DMode || 'kinetic_360',
+    hidePhone: hidePhoneVal,
+    hideEmail: hideEmailVal,
+    noIndex: noIndexVal,
+    privacy: {
+      hidePhone: hidePhoneVal,
+      hideEmail: hideEmailVal,
+      noIndex: noIndexVal,
+    },
   };
 
   return cleanObject;

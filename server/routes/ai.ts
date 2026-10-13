@@ -9,8 +9,17 @@ import {
 import { OpenAiService } from '../services/openaiService.js';
 import { AiEngine } from '../../src/services/aiEngine.ts';
 import { ROLE_PROFILES } from '../../src/data/defaultProfiles.ts';
+import { aiRateLimiter } from '../services/aiRateLimiter.js';
 
 export const aiRouter = Router();
+
+function getClientIp(req: Request): string {
+  const forwarded = req.headers['x-forwarded-for'];
+  if (typeof forwarded === 'string') {
+    return forwarded.split(',')[0].trim();
+  }
+  return req.ip || req.socket.remoteAddress || '127.0.0.1';
+}
 
 /**
  * POST /api/ai/generate-portfolio
@@ -48,60 +57,69 @@ aiRouter.post('/generate-portfolio', async (req: Request, res: Response) => {
   const targetPersona = persona || role || 'student';
   const targetDiscipline = discipline || branch || 'cs_it';
   const baseProfile = currentProfile || ROLE_PROFILES[targetPersona] || ROLE_PROFILES.student;
+  const clientIp = getClientIp(req);
 
-  // Check if live OpenAI is available
+  let capHitInfo: { reason: 'global' | 'ip'; limit: number } | null = null;
+
+  // Check if live OpenAI is available and quota permits
   if (OpenAiService.isOpenAiConfigured()) {
-    try {
-      const generated = await OpenAiService.generatePortfolio(parseResult.data);
-      const rawMerged = {
-        ...baseProfile,
-        persona: targetPersona,
-        discipline: targetDiscipline,
-        disciplineName: customBranchName || baseProfile.branchName || '',
-        name: name.trim() || baseProfile.name,
-        branch: targetDiscipline,
-        branchName: customBranchName || baseProfile.branchName,
-        tagline: generated.tagline,
-        shortBio: generated.shortBio,
-        fullBio: generated.fullBio,
-        targetRole: generated.targetRole,
-        role: targetPersona,
-        skills: generated.skills && generated.skills.length > 0
-          ? generated.skills
-          : (skills && skills.length > 0 ? skills : baseProfile.skills),
-        projects: generated.projects && generated.projects.length > 0
-          ? generated.projects.map((p, idx) => ({
-              ...p,
-              id: `ai-proj-${idx + 1}`,
-              tags: p.tools || ['Engineering'],
-              tools: p.tools || ['Engineering'],
-              bullets: p.bullets || [],
-              demoUrl: '#',
-              githubUrl: '#',
-              isAiIdea: p.isAiIdea ?? true,
-            }))
-          : (projects && projects.length > 0 ? projects : baseProfile.projects),
-        education: education && education.length > 0 ? education : baseProfile.education,
-        experiences: experiences && experiences.length > 0 ? experiences : baseProfile.experiences,
-        bentoStats: generated.bentoStats || baseProfile.bentoStats,
-        careerRecommendations: generated.careerRecommendations || baseProfile.careerRecommendations,
-      };
+    const quota = aiRateLimiter.consumeQuota(clientIp);
+    if (!quota.allowed && quota.reason) {
+      aiRateLimiter.logCapExceeded(quota.reason, quota.current, quota.limit, clientIp);
+      capHitInfo = { reason: quota.reason, limit: quota.limit };
+    } else {
+      try {
+        const generated = await OpenAiService.generatePortfolio(parseResult.data);
+        const rawMerged = {
+          ...baseProfile,
+          persona: targetPersona,
+          discipline: targetDiscipline,
+          disciplineName: customBranchName || baseProfile.branchName || '',
+          name: name.trim() || baseProfile.name,
+          branch: targetDiscipline,
+          branchName: customBranchName || baseProfile.branchName,
+          tagline: generated.tagline,
+          shortBio: generated.shortBio,
+          fullBio: generated.fullBio,
+          targetRole: generated.targetRole,
+          role: targetPersona,
+          skills: generated.skills && generated.skills.length > 0
+            ? generated.skills
+            : (skills && skills.length > 0 ? skills : baseProfile.skills),
+          projects: generated.projects && generated.projects.length > 0
+            ? generated.projects.map((p, idx) => ({
+                ...p,
+                id: `ai-proj-${idx + 1}`,
+                tags: p.tools || ['Engineering'],
+                tools: p.tools || ['Engineering'],
+                bullets: p.bullets || [],
+                demoUrl: '#',
+                githubUrl: '#',
+                isAiIdea: p.isAiIdea ?? true,
+              }))
+            : (projects && projects.length > 0 ? projects : baseProfile.projects),
+          education: education && education.length > 0 ? education : baseProfile.education,
+          experiences: experiences && experiences.length > 0 ? experiences : baseProfile.experiences,
+          bentoStats: generated.bentoStats || baseProfile.bentoStats,
+          careerRecommendations: generated.careerRecommendations || baseProfile.careerRecommendations,
+        };
 
-      const normalized = normalizePortfolioData(rawMerged);
+        const normalized = normalizePortfolioData(rawMerged);
 
-      return res.json({
-        success: true,
-        source: 'ai',
-        liveAi: true,
-        isFallback: false,
-        model: OpenAiService.getModel(),
-        portfolio: normalized,
-        improvementSuggestions: generated.improvementSuggestions || [],
-        message: `Successfully generated via OpenAI (${OpenAiService.getModel()}) with Structured Outputs`,
-      });
-    } catch (err: any) {
-      console.warn('[OpenAI Generation Warning] Failed to generate via live OpenAI, falling back to offline engine:', err?.message || err);
-      // Fall through to offline fallback
+        return res.json({
+          success: true,
+          source: 'ai',
+          liveAi: true,
+          isFallback: false,
+          model: OpenAiService.getModel(),
+          portfolio: normalized,
+          improvementSuggestions: generated.improvementSuggestions || [],
+          message: `Successfully generated via OpenAI (${OpenAiService.getModel()}) with Structured Outputs`,
+        });
+      } catch (err: any) {
+        console.warn('[OpenAI Generation Warning] Failed to generate via live OpenAI, falling back to offline engine:', err?.message || err);
+        // Fall through to offline fallback
+      }
     }
   }
 
@@ -135,13 +153,22 @@ aiRouter.post('/generate-portfolio', async (req: Request, res: Response) => {
     source: 'fallback',
     liveAi: false,
     isFallback: true,
+    capHit: !!capHitInfo,
+    capReason: capHitInfo?.reason,
     model: 'offline_heuristic_v1',
     portfolio: normalizedFallback,
-    improvementSuggestions: [
-      'Supply specific metrics and project links to improve presentation strength.',
-      'Configure OPENAI_API_KEY in server/.env to unlock dynamic real-time synthesis.',
-    ],
-    message: 'Generated with the offline engine; connect AI for richer results',
+    improvementSuggestions: capHitInfo
+      ? [
+          aiRateLimiter.getFriendlyCapMessage(capHitInfo.reason, capHitInfo.limit),
+          'Supply specific metrics and project links to improve presentation strength.',
+        ]
+      : [
+          'Supply specific metrics and project links to improve presentation strength.',
+          'Configure OPENAI_API_KEY in server/.env to unlock dynamic real-time synthesis.',
+        ],
+    message: capHitInfo
+      ? aiRateLimiter.getFriendlyCapMessage(capHitInfo.reason, capHitInfo.limit)
+      : 'Generated with the offline engine; connect AI for richer results',
   });
 });
 
@@ -159,21 +186,29 @@ aiRouter.post('/rewrite-section', async (req: Request, res: Response) => {
   }
 
   const { section, content, tone } = parseResult.data;
+  const clientIp = getClientIp(req);
+  let capHitInfo: { reason: 'global' | 'ip'; limit: number } | null = null;
 
   if (OpenAiService.isOpenAiConfigured()) {
-    try {
-      const result = await OpenAiService.rewriteSection(parseResult.data);
-      return res.json({
-        liveAi: true,
-        isFallback: false,
-        model: OpenAiService.getModel(),
-        section,
-        tone,
-        rewritten: result.rewritten,
-        explanation: result.explanation || `Rewritten in ${tone} tone using OpenAI.`,
-      });
-    } catch (err: any) {
-      console.warn('[OpenAI Rewrite Warning] Failed live rewrite, falling back to offline tone transformer:', err?.message || err);
+    const quota = aiRateLimiter.consumeQuota(clientIp);
+    if (!quota.allowed && quota.reason) {
+      aiRateLimiter.logCapExceeded(quota.reason, quota.current, quota.limit, clientIp);
+      capHitInfo = { reason: quota.reason, limit: quota.limit };
+    } else {
+      try {
+        const result = await OpenAiService.rewriteSection(parseResult.data);
+        return res.json({
+          liveAi: true,
+          isFallback: false,
+          model: OpenAiService.getModel(),
+          section,
+          tone,
+          rewritten: result.rewritten,
+          explanation: result.explanation || `Rewritten in ${tone} tone using OpenAI.`,
+        });
+      } catch (err: any) {
+        console.warn('[OpenAI Rewrite Warning] Failed live rewrite, falling back to offline tone transformer:', err?.message || err);
+      }
     }
   }
 
@@ -201,11 +236,15 @@ aiRouter.post('/rewrite-section', async (req: Request, res: Response) => {
   return res.json({
     liveAi: false,
     isFallback: true,
+    capHit: !!capHitInfo,
+    capReason: capHitInfo?.reason,
     model: 'offline_transformer',
     section,
     tone,
     rewritten,
-    explanation,
+    explanation: capHitInfo
+      ? `${aiRateLimiter.getFriendlyCapMessage(capHitInfo.reason, capHitInfo.limit)} ${explanation}`
+      : explanation,
   });
 });
 
@@ -223,18 +262,26 @@ aiRouter.post('/recommendations', async (req: Request, res: Response) => {
   }
 
   const { profile, role } = parseResult.data;
+  const clientIp = getClientIp(req);
+  let capHitInfo: { reason: 'global' | 'ip'; limit: number } | null = null;
 
   if (OpenAiService.isOpenAiConfigured()) {
-    try {
-      const recs = await OpenAiService.getRecommendations(parseResult.data);
-      return res.json({
-        liveAi: true,
-        isFallback: false,
-        model: OpenAiService.getModel(),
-        ...recs,
-      });
-    } catch (err: any) {
-      console.warn('[OpenAI Recommendations Warning] Falling back to rule-based recommendation matrix:', err?.message || err);
+    const quota = aiRateLimiter.consumeQuota(clientIp);
+    if (!quota.allowed && quota.reason) {
+      aiRateLimiter.logCapExceeded(quota.reason, quota.current, quota.limit, clientIp);
+      capHitInfo = { reason: quota.reason, limit: quota.limit };
+    } else {
+      try {
+        const recs = await OpenAiService.getRecommendations(parseResult.data);
+        return res.json({
+          liveAi: true,
+          isFallback: false,
+          model: OpenAiService.getModel(),
+          ...recs,
+        });
+      } catch (err: any) {
+        console.warn('[OpenAI Recommendations Warning] Falling back to rule-based recommendation matrix:', err?.message || err);
+      }
     }
   }
 
@@ -290,10 +337,14 @@ aiRouter.post('/recommendations', async (req: Request, res: Response) => {
   return res.json({
     liveAi: false,
     isFallback: true,
+    capHit: !!capHitInfo,
+    capReason: capHitInfo?.reason,
     model: 'offline_rule_matrix',
     recommendedSections: matrix.recommendedSections,
     priorityOrder: matrix.priorityOrder,
-    improvementSuggestions: matrix.suggestions,
+    improvementSuggestions: capHitInfo
+      ? [aiRateLimiter.getFriendlyCapMessage(capHitInfo.reason, capHitInfo.limit), ...matrix.suggestions]
+      : matrix.suggestions,
     missingCriticalInfo,
   });
 });
@@ -312,21 +363,29 @@ aiRouter.post('/chat', async (req: Request, res: Response) => {
   }
 
   const { instruction, currentProfile } = parseResult.data;
+  const clientIp = getClientIp(req);
+  let capHitInfo: { reason: 'global' | 'ip'; limit: number } | null = null;
 
   if (OpenAiService.isOpenAiConfigured()) {
-    try {
-      const result = await OpenAiService.chatEdit(parseResult.data);
-      return res.json({
-        liveAi: true,
-        isFallback: false,
-        model: OpenAiService.getModel(),
-        updatedProfile: result.updatedProfile,
-        explanation: result.explanation,
-        changesSummary: result.changesSummary || 'Applied requested edits via OpenAI.',
-        suggestedFollowUp: result.suggestedFollowUp,
-      });
-    } catch (err: any) {
-      console.warn('[OpenAI Chat Warning] Falling back to offline conversational parser:', err?.message || err);
+    const quota = aiRateLimiter.consumeQuota(clientIp);
+    if (!quota.allowed && quota.reason) {
+      aiRateLimiter.logCapExceeded(quota.reason, quota.current, quota.limit, clientIp);
+      capHitInfo = { reason: quota.reason, limit: quota.limit };
+    } else {
+      try {
+        const result = await OpenAiService.chatEdit(parseResult.data);
+        return res.json({
+          liveAi: true,
+          isFallback: false,
+          model: OpenAiService.getModel(),
+          updatedProfile: result.updatedProfile,
+          explanation: result.explanation,
+          changesSummary: result.changesSummary || 'Applied requested edits via OpenAI.',
+          suggestedFollowUp: result.suggestedFollowUp,
+        });
+      } catch (err: any) {
+        console.warn('[OpenAI Chat Warning] Falling back to offline conversational parser:', err?.message || err);
+      }
     }
   }
 
@@ -336,9 +395,13 @@ aiRouter.post('/chat', async (req: Request, res: Response) => {
   return res.json({
     liveAi: false,
     isFallback: true,
+    capHit: !!capHitInfo,
+    capReason: capHitInfo?.reason,
     model: 'offline_nlp_parser',
     updatedProfile: result.updatedProfile,
-    explanation: result.explanation,
+    explanation: capHitInfo
+      ? `${aiRateLimiter.getFriendlyCapMessage(capHitInfo.reason, capHitInfo.limit)} ${result.explanation}`
+      : result.explanation,
     changesSummary: `Executed instruction: "${instruction}"`,
     suggestedFollowUp: result.suggestedFollowUp,
   });

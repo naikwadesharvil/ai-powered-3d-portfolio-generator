@@ -183,10 +183,10 @@ export function generateResumeHtml(
 
   // Contact items array
   const contacts: string[] = [];
-  if (portfolio.email?.trim()) {
+  if (!portfolio.hideEmail && portfolio.email?.trim()) {
     contacts.push(`<span>${escapeHtml(portfolio.email.trim())}</span>`);
   }
-  if (portfolio.phone?.trim()) {
+  if (!portfolio.hidePhone && portfolio.phone?.trim()) {
     contacts.push(`<span>${escapeHtml(portfolio.phone.trim())}</span>`);
   }
   if (portfolio.location?.trim()) {
@@ -562,8 +562,8 @@ export function generateResumePlainText(portfolio: PortfolioData): string {
   lines.push('------------------------------------------------------------');
 
   const contacts: string[] = [];
-  if (portfolio.email) contacts.push(`Email: ${portfolio.email}`);
-  if (portfolio.phone) contacts.push(`Phone: ${portfolio.phone}`);
+  if (!portfolio.hideEmail && portfolio.email) contacts.push(`Email: ${portfolio.email}`);
+  if (!portfolio.hidePhone && portfolio.phone) contacts.push(`Phone: ${portfolio.phone}`);
   if (portfolio.location) contacts.push(`Location: ${portfolio.location}`);
   if (portfolio.linkedin) contacts.push(`LinkedIn: ${portfolio.linkedin}`);
   if (portfolio.github) contacts.push(`GitHub: ${portfolio.github}`);
@@ -657,8 +657,8 @@ export function generateResumeMarkdown(portfolio: PortfolioData): string {
   lines.push(`**${portfolio.targetRole || portfolio.tagline || portfolio.role}**\n`);
 
   const contacts: string[] = [];
-  if (portfolio.email) contacts.push(`[${portfolio.email}](mailto:${portfolio.email})`);
-  if (portfolio.phone) contacts.push(portfolio.phone);
+  if (!portfolio.hideEmail && portfolio.email) contacts.push(`[${portfolio.email}](mailto:${portfolio.email})`);
+  if (!portfolio.hidePhone && portfolio.phone) contacts.push(portfolio.phone);
   if (portfolio.location) contacts.push(portfolio.location);
   if (portfolio.linkedin) contacts.push(`[LinkedIn](${portfolio.linkedin})`);
   if (portfolio.github) contacts.push(`[GitHub](${portfolio.github})`);

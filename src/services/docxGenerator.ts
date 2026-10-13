@@ -133,8 +133,8 @@ export function buildDocxDocument(
 
   // 3. Header: Contact Details
   const contactParts: string[] = [];
-  if (portfolio.email?.trim()) contactParts.push(portfolio.email.trim());
-  if (portfolio.phone?.trim()) contactParts.push(portfolio.phone.trim());
+  if (!portfolio.hideEmail && portfolio.email?.trim()) contactParts.push(portfolio.email.trim());
+  if (!portfolio.hidePhone && portfolio.phone?.trim()) contactParts.push(portfolio.phone.trim());
   if (portfolio.location?.trim()) contactParts.push(portfolio.location.trim());
   if (portfolio.linkedin?.trim()) {
     contactParts.push(portfolio.linkedin.trim().replace(/^https?:\/\/(www\.)?/, ''));

@@ -228,7 +228,7 @@ export const LivePortfolioPreview: React.FC = () => {
                     {portfolio.location}
                   </span>
                 )}
-                {portfolio.email && (
+                {!portfolio.hideEmail && portfolio.email && (
                   <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                     <Mail size={14} color="var(--accent-cyan)" />
                     {portfolio.email}

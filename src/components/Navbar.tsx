@@ -27,7 +27,7 @@ export const Navbar: React.FC<NavbarProps> = ({ portfolio, onOpenStudio, onOpenR
     const flattenedSkills = getFlattenedSkills(portfolio.skills);
     const resumeContent = `# ${portfolio.name}
 ${portfolio.tagline}
-Contact: ${portfolio.email} | Location: ${portfolio.location}
+${!portfolio.hideEmail && portfolio.email ? `Contact: ${portfolio.email} | ` : ''}Location: ${portfolio.location}
 LinkedIn: ${portfolio.linkedin || 'N/A'} | GitHub: ${portfolio.github || 'N/A'}
 
 ## PROFESSIONAL SUMMARY

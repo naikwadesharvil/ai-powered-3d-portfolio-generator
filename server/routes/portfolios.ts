@@ -294,7 +294,7 @@ portfoliosRouter.get('/:slug', async (req: Request, res: Response) => {
       });
     }
 
-    // Security: Strip private owner token hash before returning public read-only record
+    // Security & Privacy: Strip private owner token hash and honor privacy toggles for public read-only record
     const publicPortfolio = {
       ...record.data,
       slug: record.slug,
@@ -302,6 +302,20 @@ portfoliosRouter.get('/:slug', async (req: Request, res: Response) => {
       updatedAt: record.updatedAt,
     };
     delete (publicPortfolio as any).ownerTokenHash;
+
+    if (publicPortfolio.hidePhone) {
+      publicPortfolio.phone = '';
+      if (publicPortfolio.contact) {
+        publicPortfolio.contact = { ...publicPortfolio.contact, phone: '' };
+      }
+    }
+
+    if (publicPortfolio.hideEmail) {
+      publicPortfolio.email = '';
+      if (publicPortfolio.contact) {
+        publicPortfolio.contact = { ...publicPortfolio.contact, email: '' };
+      }
+    }
 
     return res.json({
       success: true,

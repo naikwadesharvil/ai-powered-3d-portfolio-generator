@@ -33,7 +33,7 @@ export function generateStaticHtml(portfolio: PortfolioData): string {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>${name} — ${tagline}</title>
+  ${portfolio.noIndex ? '<meta name="robots" content="noindex, nofollow" />\n  ' : ''}<title>${name} — ${tagline}</title>
   <style>
     :root {
       --bg-primary: #030508;
@@ -306,7 +306,7 @@ export function generateStaticHtml(portfolio: PortfolioData): string {
       <div class="card" style="max-width: 600px; margin: 0 auto; text-align: center;">
         <div class="card-title" style="font-size: 1.5rem; margin-bottom: 12px;">Let's Build Together</div>
         <p class="card-desc">Reach out for engineering roles, technical collaboration, or advisory inquiries.</p>
-        <a href="${mailtoHref}" class="btn-primary" style="display: inline-block; margin: 12px 0 24px;">SEND TRANSMISSION: ${email}</a>
+        ${!portfolio.hideEmail && rawEmail ? `<a href="${mailtoHref}" class="btn-primary" style="display: inline-block; margin: 12px 0 24px;">SEND TRANSMISSION: ${email}</a>` : '<div style="display: inline-block; margin: 12px 0 24px; color: var(--accent-cyan); font-family: var(--font-mono); font-size: 0.88rem;">TRANSMISSION CHANNELS SECURE</div>'}
         <div style="display: flex; justify-content: center; gap: 18px; margin-top: 16px;">
           ${githubUrl && githubUrl !== '#' ? `<a href="${githubUrl}" target="_blank" rel="noopener noreferrer" style="color: var(--accent-cyan); text-decoration: none; font-size: 0.85rem; font-family: var(--font-mono);">GitHub &rarr;</a>` : ''}
           ${linkedinUrl && linkedinUrl !== '#' ? `<a href="${linkedinUrl}" target="_blank" rel="noopener noreferrer" style="color: var(--accent-cyan); text-decoration: none; font-size: 0.85rem; font-family: var(--font-mono);">LinkedIn &rarr;</a>` : ''}
