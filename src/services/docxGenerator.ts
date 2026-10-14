@@ -334,9 +334,9 @@ export function buildDocxDocument(
     }
   }
 
-  // 8. Technical Projects (Omitted if empty)
+  // 8. Technical Projects (Omitted if empty; strictly verified completed projects, never AI suggestions)
   const projList = (portfolio.projects || []).filter(
-    (p: ProjectItem) => p.title && p.title.trim()
+    (p: ProjectItem) => p.title && p.title.trim() && !p.isAiIdea
   );
   if (showProjects && projList.length > 0) {
     addSectionHeading('Technical Projects');

@@ -11,8 +11,8 @@ import type {
   CertificationItem,
   PublicationItem,
 } from '../types/portfolio';
-import { ROLE_PROFILES } from '../data/defaultProfiles.ts';
 import { getDisciplinePreset } from '../data/disciplinePresets.ts';
+import { normalizePortfolioData } from '../types/portfolioSchema.ts';
 
 export interface AutopilotInput {
   name: string;
@@ -61,8 +61,9 @@ export class AiEngine {
       currentProfile,
     } = input;
 
-    const base = currentProfile || ROLE_PROFILES[role];
-    const finalName = (name && name.trim().length > 0) ? name.trim() : (base?.name || 'Alex Chen');
+    const finalName = (name && name.trim().length > 0)
+      ? name.trim()
+      : (currentProfile?.name || 'Alex Chen');
     const discipline = getDisciplinePreset(branch, customBranchName);
 
     // Resolve interests: use provided or discipline defaults
@@ -137,25 +138,40 @@ export class AiEngine {
     });
 
     // Projects Assembly:
-    // 1. User verified projects (never fabricated, isAiIdea: false)
+    // 1. User verified projects (strictly verified completed work, isAiIdea: false)
     const verifiedProjects: ProjectItem[] = [];
     if (userProjects && userProjects.length > 0) {
       userProjects.forEach((p) => {
         verifiedProjects.push({ ...p, isAiIdea: false });
       });
-    } else {
-      // Use discipline sample projects as verified baseline if user provided none
-      discipline.sampleProjects.forEach((p) => {
+    } else if (currentProfile?.projects && currentProfile.projects.length > 0) {
+      currentProfile.projects.filter((p) => !p.isAiIdea).forEach((p) => {
         verifiedProjects.push({ ...p, isAiIdea: false });
       });
     }
 
-    // 2. AI Suggestions (strictly marked isAiIdea: true)
-    const aiIdeas: ProjectItem[] = discipline.aiProjectSuggestions.map((sug, idx) => ({
-      ...sug,
-      id: `ai-sug-${discipline.id}-${idx + 1}-${Date.now()}`,
-      isAiIdea: true,
-    }));
+    // 2. AI Suggestions (strictly marked isAiIdea: true; never presented as completed work)
+    const aiIdeas: ProjectItem[] = [];
+
+    // If user provided no verified projects, include discipline sample projects as concept proposals only
+    if (verifiedProjects.length === 0) {
+      discipline.sampleProjects.forEach((p, idx) => {
+        aiIdeas.push({
+          ...p,
+          id: `concept-${discipline.id}-${idx + 1}`,
+          isAiIdea: true,
+          role: p.role ? `${p.role} (Concept Proposal)` : 'Concept Proposal',
+        });
+      });
+    }
+
+    discipline.aiProjectSuggestions.forEach((sug, idx) => {
+      aiIdeas.push({
+        ...sug,
+        id: `ai-sug-${discipline.id}-${idx + 1}-${Date.now()}`,
+        isAiIdea: true,
+      });
+    });
 
     const finalProjects = [...verifiedProjects, ...aiIdeas];
 
@@ -166,27 +182,20 @@ export class AiEngine {
       stat3: discipline.bentoStatsDefaults.stat3,
     };
 
-    // Education Assembly: Preserve user education if supplied
+    // Education Assembly: Never fabricate institutions, degrees, or grades.
+    // Preserve user education if supplied; if missing, preserve empty state.
     const finalEducation: EducationItem[] = (userEducation && userEducation.length > 0)
       ? userEducation
-      : (base?.education && base.education.length > 0)
-        ? base.education
-        : [
-            {
-              id: 'edu-primary',
-              institution: 'Engineering & Technology Institute',
-              degree: `Degree / Specialization in ${discipline.shortName}`,
-              period: '2022 – 2026',
-              score: 'First Class / Distinction',
-              details: `Core discipline coursework in ${discipline.label}`,
-            },
-          ];
+      : (currentProfile?.education && currentProfile.education.length > 0)
+        ? currentProfile.education
+        : [];
 
-    // Experience Assembly: Preserve user experience if supplied
+    // Experience Assembly: Never insert mock employers or fictional employment history.
+    // Preserve user experience if supplied; if missing, preserve empty state.
     const finalExperience: ExperienceItem[] = (userExperiences && userExperiences.length > 0)
       ? userExperiences
-      : (base?.experiences && base.experiences.length > 0)
-        ? base.experiences
+      : (currentProfile?.experiences && currentProfile.experiences.length > 0)
+        ? currentProfile.experiences
         : [];
 
     // Role-tailored section visibility and order
@@ -216,10 +225,21 @@ export class AiEngine {
       sectionOrder = ['hero', 'welcome', 'about', 'services', 'projects', 'contact'];
     }
 
-    return {
-      ...base,
+    const finalCertifications = currentProfile?.certifications || [];
+    const finalPublications = currentProfile?.publications || [];
+    const finalEmail = currentProfile?.email || '';
+    const finalPhone = currentProfile?.phone || '';
+    const finalLocation = currentProfile?.location || '';
+    const finalGithub = currentProfile?.github || '';
+    const finalLinkedin = currentProfile?.linkedin || '';
+    const finalTwitter = currentProfile?.twitter || '';
+    const finalAvatarUrl = currentProfile?.avatarUrl || '/assets/image_1/hero_front.jpg';
+    const finalResumeUrl = currentProfile?.resumeUrl || '#';
+
+    return normalizePortfolioData({
+      ...(currentProfile || {}),
       id: `portfolio_${finalName.toLowerCase().replace(/[^a-z0-9]/g, '_')}`,
-      version: (base?.version || 1) + 1,
+      version: (currentProfile?.version || 1) + 1,
       lastUpdated: new Date().toISOString().split('T')[0],
       name: finalName,
       branch,
@@ -239,6 +259,16 @@ export class AiEngine {
       projects: finalProjects,
       education: finalEducation,
       experiences: finalExperience,
+      certifications: finalCertifications,
+      publications: finalPublications,
+      email: finalEmail,
+      phone: finalPhone,
+      location: finalLocation,
+      github: finalGithub,
+      linkedin: finalLinkedin,
+      twitter: finalTwitter,
+      avatarUrl: finalAvatarUrl,
+      resumeUrl: finalResumeUrl,
       bentoStats,
       careerRecommendations: discipline.careerRecommendations,
       aiProjectSuggestions: aiIdeas,
@@ -246,13 +276,13 @@ export class AiEngine {
       sectionOrder,
       telemetry: {
         session: `SESSION: ${finalName.toUpperCase().split(' ')[0]}_ONLINE`,
-        timezone: base?.telemetry?.timezone || 'UTC+05:30 [ONLINE]',
+        timezone: currentProfile?.telemetry?.timezone || 'UTC+05:30 [ONLINE]',
         status: `STATUS: ACTIVE // ${discipline.shortName.toUpperCase()} // 2026`,
-        coords: base?.telemetry?.coords || '16.8524° N, 74.2814° E',
+        coords: currentProfile?.telemetry?.coords || '16.8524° N, 74.2814° E',
         fps: '60 [STABLE]',
         coreEngine: discipline.telemetryCode,
       },
-    };
+    });
   }
 
   /**

@@ -8,7 +8,6 @@ import {
 } from '../schemas/portfolioSchema.js';
 import { OpenAiService } from '../services/openaiService.js';
 import { AiEngine } from '../../src/services/aiEngine.ts';
-import { ROLE_PROFILES } from '../../src/data/defaultProfiles.ts';
 import { aiRateLimiter } from '../services/aiRateLimiter.js';
 
 export const aiRouter = Router();
@@ -56,7 +55,6 @@ aiRouter.post('/generate-portfolio', async (req: Request, res: Response) => {
 
   const targetPersona = persona || role || 'student';
   const targetDiscipline = discipline || branch || 'cs_it';
-  const baseProfile = currentProfile || ROLE_PROFILES[targetPersona] || ROLE_PROFILES.student;
   const clientIp = getClientIp(req);
 
   let capHitInfo: { reason: 'global' | 'ip'; limit: number } | null = null;
@@ -70,14 +68,33 @@ aiRouter.post('/generate-portfolio', async (req: Request, res: Response) => {
     } else {
       try {
         const generated = await OpenAiService.generatePortfolio(parseResult.data);
+
+        // Strict Fact Provenance:
+        // Verified user projects are preserved as verified (isAiIdea: false).
+        // AI-generated suggestions are strictly tagged as suggestions (isAiIdea: true).
+        const verifiedUserProjects = (projects && projects.length > 0)
+          ? projects.map((p) => ({ ...p, isAiIdea: false }))
+          : (currentProfile?.projects?.filter((p) => !p.isAiIdea) || []);
+
+        const aiSuggestions = (generated.projects || []).map((p, idx) => ({
+          ...p,
+          id: `ai-proj-${idx + 1}`,
+          tags: p.tools || ['Engineering'],
+          tools: p.tools || ['Engineering'],
+          bullets: p.bullets || [],
+          demoUrl: '#',
+          githubUrl: '#',
+          isAiIdea: true,
+        }));
+
         const rawMerged = {
-          ...baseProfile,
+          ...(currentProfile || {}),
           persona: targetPersona,
           discipline: targetDiscipline,
-          disciplineName: customBranchName || baseProfile.branchName || '',
-          name: name.trim() || baseProfile.name,
+          disciplineName: customBranchName || currentProfile?.branchName || '',
+          name: name.trim() || currentProfile?.name || 'Alex Chen',
           branch: targetDiscipline,
-          branchName: customBranchName || baseProfile.branchName,
+          branchName: customBranchName || currentProfile?.branchName || '',
           tagline: generated.tagline,
           shortBio: generated.shortBio,
           fullBio: generated.fullBio,
@@ -85,23 +102,12 @@ aiRouter.post('/generate-portfolio', async (req: Request, res: Response) => {
           role: targetPersona,
           skills: generated.skills && generated.skills.length > 0
             ? generated.skills
-            : (skills && skills.length > 0 ? skills : baseProfile.skills),
-          projects: generated.projects && generated.projects.length > 0
-            ? generated.projects.map((p, idx) => ({
-                ...p,
-                id: `ai-proj-${idx + 1}`,
-                tags: p.tools || ['Engineering'],
-                tools: p.tools || ['Engineering'],
-                bullets: p.bullets || [],
-                demoUrl: '#',
-                githubUrl: '#',
-                isAiIdea: p.isAiIdea ?? true,
-              }))
-            : (projects && projects.length > 0 ? projects : baseProfile.projects),
-          education: education && education.length > 0 ? education : baseProfile.education,
-          experiences: experiences && experiences.length > 0 ? experiences : baseProfile.experiences,
-          bentoStats: generated.bentoStats || baseProfile.bentoStats,
-          careerRecommendations: generated.careerRecommendations || baseProfile.careerRecommendations,
+            : (skills && skills.length > 0 ? skills : (currentProfile?.skills || [])),
+          projects: [...verifiedUserProjects, ...aiSuggestions],
+          education: education && education.length > 0 ? education : (currentProfile?.education || []),
+          experiences: experiences && experiences.length > 0 ? experiences : (currentProfile?.experiences || []),
+          bentoStats: generated.bentoStats || currentProfile?.bentoStats,
+          careerRecommendations: generated.careerRecommendations || currentProfile?.careerRecommendations,
         };
 
         const normalized = normalizePortfolioData(rawMerged);
@@ -135,7 +141,7 @@ aiRouter.post('/generate-portfolio', async (req: Request, res: Response) => {
     education,
     experiences,
     achievements,
-    currentProfile: baseProfile,
+    currentProfile,
   });
 
   const mergedFallback = {

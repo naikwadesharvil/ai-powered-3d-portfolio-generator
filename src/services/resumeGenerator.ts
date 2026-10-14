@@ -472,7 +472,8 @@ export function generateResumeHtml(
     })()}
 
     ${(() => {
-      const projList = (portfolio.projects || []).filter((p: ProjectItem) => p.title && p.title.trim());
+      // Resumes strictly present verified completed projects, never unbuilt AI suggestions
+      const projList = (portfolio.projects || []).filter((p: ProjectItem) => p.title && p.title.trim() && !p.isAiIdea);
       if (!showProjects || projList.length === 0) return '';
       return `<!-- Technical Projects -->
     <section class="section">
@@ -485,7 +486,6 @@ export function generateResumeHtml(
           <div>
             <span class="entry-title">${escapeHtml(proj.title)}</span>
             ${proj.role?.trim() ? `<span class="entry-subtitle"> (${escapeHtml(proj.role)})</span>` : ''}
-            ${proj.isAiIdea && !isClassic ? '<span class="entry-badge" style="color: #6d28d9; background: #f5f3ff;">Proposed Concept</span>' : ''}
           </div>
           ${proj.date?.trim() ? `<span class="entry-date">${escapeHtml(proj.date)}</span>` : ''}
         </div>
@@ -612,10 +612,13 @@ export function generateResumePlainText(portfolio: PortfolioData): string {
     lines.push('');
   }
 
-  if (portfolio.projects && portfolio.projects.length > 0) {
+  const verifiedProjects = (portfolio.projects || []).filter(
+    (p: ProjectItem) => p.title && p.title.trim() && !p.isAiIdea
+  );
+  if (verifiedProjects.length > 0) {
     lines.push('TECHNICAL PROJECTS');
     lines.push('============================================================');
-    for (const proj of portfolio.projects) {
+    for (const proj of verifiedProjects) {
       lines.push(`${proj.title.toUpperCase()}${proj.role ? ` (${proj.role})` : ''}${proj.date ? ` — ${proj.date}` : ''}`);
       lines.push(`• Description: ${proj.description}`);
       if (proj.metrics) lines.push(`• Key Metric / Outcome: ${proj.metrics}`);
@@ -704,9 +707,12 @@ export function generateResumeMarkdown(portfolio: PortfolioData): string {
     lines.push('');
   }
 
-  if (portfolio.projects && portfolio.projects.length > 0) {
+  const verifiedProjects = (portfolio.projects || []).filter(
+    (p: ProjectItem) => p.title && p.title.trim() && !p.isAiIdea
+  );
+  if (verifiedProjects.length > 0) {
     lines.push('## Technical Projects');
-    for (const proj of portfolio.projects) {
+    for (const proj of verifiedProjects) {
       lines.push(`### ${proj.title}${proj.role ? ` (${proj.role})` : ''}`);
       if (proj.date) lines.push(`*${proj.date}*`);
       lines.push(`- ${proj.description}`);
