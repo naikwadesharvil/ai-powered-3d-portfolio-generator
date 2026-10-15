@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { PortfolioData } from '../types/portfolio';
-import { ROLE_PROFILES } from '../data/defaultProfiles.ts';
+import { NEUTRAL_PLACEHOLDER_PROFILE } from '../data/defaultProfiles.ts';
 import {
   type ThemeTokens,
   CURATED_THEME_PRESETS,
@@ -66,13 +66,13 @@ function getInitialPortfolio(): PortfolioData {
       const saved = localStorage.getItem('ai_portfolio_draft') || localStorage.getItem(AUTOSAVE_STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (parsed && parsed.name) return parsed;
+        if (parsed && parsed.name && parsed.name !== 'Sharvil Naikwade') return parsed;
       }
     } catch {
       // Fallback
     }
   }
-  return ROLE_PROFILES.student;
+  return NEUTRAL_PLACEHOLDER_PROFILE;
 }
 
 function getInitialTheme(): ThemeTokens {
@@ -140,7 +140,7 @@ export const usePortfolioStore = create<PortfolioStoreState>((set, get) => ({
       }
     }
     set({
-      portfolio: ROLE_PROFILES.student,
+      portfolio: NEUTRAL_PLACEHOLDER_PROFILE,
       themeTokens: CURATED_THEME_PRESETS[0],
       history: [],
       future: [],

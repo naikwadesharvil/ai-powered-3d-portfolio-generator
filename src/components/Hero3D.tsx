@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Activity, Compass, Sparkles, ArrowRight } from 'lucide-react';
+import { Activity, Sparkles, ArrowRight } from 'lucide-react';
 import type { PortfolioData } from '../types/portfolio';
-import { FrameScrubber } from './FrameScrubber';
-import { ThreeDImageStage } from './ThreeDImageStage';
 import { HologramCard } from './HologramCard';
 
 interface Hero3DProps {
@@ -13,8 +11,6 @@ interface Hero3DProps {
 
 export const Hero3D: React.FC<Hero3DProps> = ({ portfolio, onOpenStudio, isPublicPage }) => {
   const [currentTimeStr, setCurrentTimeStr] = useState('');
-  const [currentFrameNum, setCurrentFrameNum] = useState(1);
-  const [rotationDeg, setRotationDeg] = useState(180);
 
   // Live Timezone Clock
   useEffect(() => {
@@ -270,76 +266,23 @@ export const Hero3D: React.FC<Hero3DProps> = ({ portfolio, onOpenStudio, isPubli
         </div>
       </div>
 
-      {/* 3D Showcase: Left = HologramCard, Right = 360° Portrait Scrubber */}
+      {/* 3D Showcase: Centered, Larger HologramCard */}
       <div
         className="hero-showcase-grid"
         style={{
           width: '100%',
-          maxWidth: '1240px',
+          maxWidth: '620px',
           display: 'flex',
-          flexWrap: 'wrap',
+          flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          gap: '32px',
           margin: '0 auto 36px',
           position: 'relative',
           zIndex: 20,
           padding: '0 20px',
         }}
       >
-        {/* HologramCard 3D Component */}
-        <div
-          className="hero-hologram-slot"
-          style={{
-            flex: '1 1 380px',
-            maxWidth: '480px',
-            width: '100%',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-          }}
-        >
-          <HologramCard portfolio={portfolio} />
-        </div>
-
-        {/* Central Interactive 2D Canvas Frame Scrubber */}
-        <div
-          className="hero-scrubber-slot"
-          style={{
-            flex: '1 1 440px',
-            maxWidth: '560px',
-            width: '100%',
-            height: '420px',
-            position: 'relative',
-          }}
-        >
-          <ThreeDImageStage
-            perspective={1400}
-            maxTilt={12}
-            glowColor="var(--glow-color)"
-            showGlare={true}
-            showFloorShadow={true}
-            floatingIdle={true}
-            borderRadius="24px"
-            style={{ width: '100%', height: '100%' }}
-          >
-            <div style={{ width: '100%', height: '100%', position: 'relative' }}>
-              <FrameScrubber
-                folderPath="/assets/image_1"
-                totalFrames={36}
-                fallbackImage="/assets/image_1/hero_front.webp"
-                mode="cursor"
-                fit="cover"
-                overlayTelemetry={true}
-                telemetryLabel="HERO // 360° PORTRAIT SCRUBBER"
-                onFrameChange={(f, p) => {
-                  setCurrentFrameNum(f);
-                  setRotationDeg(Math.round(p * 360));
-                }}
-              />
-            </div>
-          </ThreeDImageStage>
-        </div>
+        <HologramCard portfolio={portfolio} style={{ maxWidth: '560px' }} />
       </div>
 
       {/* Hero Foreground Content Layer (Role, Name, View Works, About) */}
@@ -505,8 +448,8 @@ export const Hero3D: React.FC<Hero3DProps> = ({ portfolio, onOpenStudio, isPubli
           zIndex: 20,
         }}
       >
-        <Compass size={12} color="var(--accent-cyan)" />
-        <span>MOVE CURSOR HORIZONTALLY TO ROTATE 360° // FRAME {String(currentFrameNum).padStart(2, '0')}/36 ({rotationDeg}°)</span>
+        <Sparkles size={12} color="var(--accent-cyan)" />
+        <span>INTERACTIVE 3D HOLOGRAM PORTFOLIO // REAL-TIME SYNTHESIS</span>
       </div>
 
       <style>{`

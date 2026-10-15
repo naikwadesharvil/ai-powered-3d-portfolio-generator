@@ -31,6 +31,7 @@ import {
   MessageSquare,
 } from 'lucide-react';
 import { usePortfolioStore, type AiWritingTone } from '../store/portfolioStore';
+import { CURATED_THEME_PRESETS } from '../types/themeTokens';
 import { SectionSortableItem } from './SectionSortableItem';
 import { ThemeCustomizer } from './ThemeCustomizer';
 import { LivePortfolioPreview } from './LivePortfolioPreview';
@@ -72,6 +73,8 @@ export const SplitCustomizer: React.FC<SplitCustomizerProps> = ({
     setActiveTone,
     resetPortfolio,
     setPortfolio,
+    themeTokens,
+    applyThemePreset,
   } = usePortfolioStore();
 
   const [activeEditorTab, setActiveEditorTab] = useState<'sections' | 'themes'>('sections');
@@ -95,6 +98,54 @@ export const SplitCustomizer: React.FC<SplitCustomizerProps> = ({
     explanation: string;
     summary: string;
   } | null>(null);
+
+  const [suggestionNotice, setSuggestionNotice] = useState<string | null>(null);
+
+  const getDisciplineSuggestion = () => {
+    const disc = portfolio.discipline || portfolio.branch || 'cs_it';
+    if (disc === 'ai_ml' || disc === 'systems_infra' || disc === 'mechatronics') {
+      return {
+        themeId: 'obsidian_stealth',
+        themeName: 'Obsidian Stealth',
+        order: ['hero', 'welcome', 'about', 'skills', 'projects', 'experience', 'publications', 'certifications', 'services', 'contact'],
+        rationale: 'Deep tech & systems: prioritized architecture telemetry & verified capstone metrics.',
+      };
+    }
+    if (disc === 'frontend_creative' || disc === 'mobile_app' || disc === 'product_design') {
+      return {
+        themeId: 'tokyo_neon',
+        themeName: 'Tokyo Night',
+        order: ['hero', 'welcome', 'projects', 'about', 'skills', 'services', 'experience', 'certifications', 'publications', 'contact'],
+        rationale: 'Creative & visual: prioritized capstone visual showcase before background.',
+      };
+    }
+    if (disc === 'academic_research' || disc === 'sciences' || disc === 'biotech') {
+      return {
+        themeId: 'minimal_mono',
+        themeName: 'Minimal Monochrome',
+        order: ['hero', 'welcome', 'about', 'publications', 'projects', 'experience', 'skills', 'certifications', 'services', 'contact'],
+        rationale: 'Research & academia: highlighted peer-reviewed publications and core citations.',
+      };
+    }
+    return {
+      themeId: 'neon_cyberpunk',
+      themeName: 'Cyberpunk Neon',
+      order: ['hero', 'welcome', 'about', 'skills', 'projects', 'experience', 'services', 'certifications', 'publications', 'contact'],
+      rationale: 'Balanced engineering: optimized for high-impact 3D presentation.',
+    };
+  };
+
+  const handleApplySuggestion = () => {
+    const suggestion = getDisciplineSuggestion();
+    applyThemePreset(suggestion.themeId);
+    const currentSections = [...(portfolio.sectionOrder || [])];
+    const newOrder = suggestion.order.filter((id) => currentSections.includes(id));
+    currentSections.forEach((id) => {
+      if (!newOrder.includes(id)) newOrder.push(id);
+    });
+    reorderSections(newOrder);
+    setSuggestionNotice(`Applied ${suggestion.themeName} & optimal section flow! Click Undo to revert.`);
+  };
 
   // Sensors for @dnd-kit
   const sensors = useSensors(
@@ -448,6 +499,159 @@ export const SplitCustomizer: React.FC<SplitCustomizerProps> = ({
             gap: '16px',
           }}
         >
+          {/* Quick Styles Row (6 Theme Presets) */}
+          <div
+            style={{
+              padding: '12px 14px',
+              borderRadius: '10px',
+              background: 'rgba(255, 255, 255, 0.03)',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Palette size={14} color="var(--accent-cyan)" />
+                <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#fff', letterSpacing: '0.04em' }}>
+                  QUICK STYLES // 6 THEME PRESETS
+                </span>
+              </div>
+              <span style={{ fontSize: '0.68rem', fontFamily: 'var(--font-mono)', color: 'var(--accent-cyan)' }}>
+                {themeTokens.name}
+              </span>
+            </div>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
+                gap: '8px',
+              }}
+            >
+              {CURATED_THEME_PRESETS.map((preset) => {
+                const isSelected = themeTokens.id === preset.id;
+                return (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    onClick={() => applyThemePreset(preset.id)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      padding: '8px 10px',
+                      borderRadius: '6px',
+                      background: isSelected ? 'rgba(0, 242, 254, 0.12)' : 'rgba(255, 255, 255, 0.02)',
+                      border: isSelected ? '1px solid var(--accent-cyan)' : '1px solid rgba(255, 255, 255, 0.08)',
+                      color: isSelected ? '#ffffff' : 'rgba(255, 255, 255, 0.75)',
+                      fontSize: '0.74rem',
+                      fontFamily: 'var(--font-mono)',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease',
+                      textAlign: 'left',
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: '10px',
+                        height: '10px',
+                        borderRadius: '50%',
+                        background: `linear-gradient(135deg, ${preset.accentPrimary}, ${preset.accentSecondary})`,
+                        flexShrink: 0,
+                      }}
+                    />
+                    <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {preset.name}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Suggested For You Card */}
+          <div
+            style={{
+              padding: '12px 14px',
+              borderRadius: '10px',
+              background: 'linear-gradient(135deg, rgba(0, 242, 254, 0.06), rgba(255, 0, 85, 0.04))',
+              border: '1px solid rgba(0, 242, 254, 0.25)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '8px',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Sparkles size={14} color="var(--accent-cyan)" />
+                <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#fff', letterSpacing: '0.04em' }}>
+                  SUGGESTED FOR YOU
+                </span>
+                <span
+                  style={{
+                    fontSize: '0.64rem',
+                    fontFamily: 'var(--font-mono)',
+                    padding: '2px 6px',
+                    borderRadius: '4px',
+                    background: 'rgba(0, 242, 254, 0.15)',
+                    color: 'var(--accent-cyan)',
+                  }}
+                >
+                  {(portfolio.disciplineName || portfolio.discipline || 'Engineering').toUpperCase()}
+                </span>
+              </div>
+            </div>
+            <p style={{ margin: 0, fontSize: '0.76rem', color: 'rgba(255, 255, 255, 0.8)', lineHeight: 1.4 }}>
+              <strong>{getDisciplineSuggestion().themeName}</strong> theme + optimized section order.{' '}
+              {getDisciplineSuggestion().rationale}
+            </p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px' }}>
+              <button
+                type="button"
+                onClick={handleApplySuggestion}
+                style={{
+                  padding: '6px 14px',
+                  borderRadius: '6px',
+                  background: 'var(--accent-cyan)',
+                  color: '#000',
+                  border: 'none',
+                  fontSize: '0.75rem',
+                  fontWeight: 700,
+                  fontFamily: 'var(--font-mono)',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                }}
+              >
+                <Sparkles size={12} />
+                <span>Apply in 1 Click</span>
+              </button>
+              {suggestionNotice && (
+                <button
+                  type="button"
+                  onClick={undo}
+                  disabled={!canUndo()}
+                  style={{
+                    padding: '6px 10px',
+                    borderRadius: '6px',
+                    background: 'transparent',
+                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                    color: '#fff',
+                    fontSize: '0.72rem',
+                    fontFamily: 'var(--font-mono)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Undo
+                </button>
+              )}
+            </div>
+            {suggestionNotice && (
+              <span style={{ fontSize: '0.7rem', color: '#00ff88', fontFamily: 'var(--font-mono)' }}>
+                ✓ {suggestionNotice}
+              </span>
+            )}
+          </div>
+
           {activeEditorTab === 'sections' ? (
             <div>
               <div style={{ marginBottom: '14px' }}>

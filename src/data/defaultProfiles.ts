@@ -12,7 +12,7 @@ export const STUDENT_PROFILE: PortfolioData = normalizePortfolioData({
   tagline: 'AI/ML Engineer & Python Developer',
   shortBio: 'Final-year B.Tech student specializing in Artificial Intelligence and Machine Learning. Hands-on experience in Python development, machine learning, NLP, and LLM integration.',
   fullBio: 'Final-year B.Tech student specializing in Artificial Intelligence and Machine Learning at Rajarambapu Institute of Technology. Experienced in API testing, unit testing, model evaluation, and data preprocessing. Passionate about engineering reliable, data-driven AI systems and deploying scalable full-stack applications with modern web technologies.',
-  avatarUrl: '/assets/image_1/hero_front.jpg',
+  avatarUrl: '',
   resumeUrl: '#',
   targetRole: 'AI/ML Engineer / Junior Python Developer',
   interests: ['Artificial Intelligence', 'Machine Learning', 'NLP', 'Computer Vision', 'Web Development'],
@@ -518,9 +518,103 @@ export const FREELANCER_PROFILE: PortfolioData = normalizePortfolioData({
   sectionOrder: ['hero', 'welcome', 'about', 'services', 'projects', 'contact']
 });
 
+export const NEUTRAL_PLACEHOLDER_PROFILE: PortfolioData = normalizePortfolioData({
+  id: 'profile_new_visitor',
+  version: 2,
+  role: 'student',
+  theme: 'cyberpunk_neon',
+  hero3DMode: 'kinetic_360',
+  name: 'Your Name',
+  tagline: 'Your Role & Specialization',
+  shortBio: 'Enter your background details in the AI Studio to generate your personalized 3D hologram portfolio.',
+  fullBio: 'Tell the world about yourself and what you are building. Enter your details in the Studio to generate your personalized 3D portfolio with custom 3D holograms, interactive project blueprints, and ATS resume exports.',
+  avatarUrl: '',
+  resumeUrl: '#',
+  targetRole: 'Software Engineer',
+  interests: ['System Architecture', 'Modern Web', 'Interactive 3D'],
+  email: '',
+  phone: '',
+  location: 'City, Country',
+  github: '',
+  linkedin: '',
+  twitter: '',
+  telemetry: {
+    session: 'SESSION: READY',
+    timezone: 'UTC [LOCAL]',
+    status: 'STATUS: READY FOR GENERATION',
+    coords: '0.0000° N, 0.0000° E',
+    fps: '60 [STABLE]',
+    coreEngine: 'AI // 3D CANVAS // ENGINE',
+  },
+  bentoStats: {
+    stat1: {
+      title: 'PRIMARY DOMAIN',
+      value: 'Technology',
+      subtext: 'Engineering & Craft'
+    },
+    stat2: {
+      title: 'EXPERTISE',
+      value: '6+ Skills',
+      subtext: 'Ready for Generation'
+    },
+    stat3: {
+      title: 'PORTFOLIO',
+      value: '3D Hologram',
+      subtext: 'Instant Synthesis'
+    }
+  },
+  skills: [
+    { name: 'Core Skill 1', category: 'Core', level: 'advanced' },
+    { name: 'Core Skill 2', category: 'Core', level: 'advanced' },
+    { name: 'System Architecture', category: 'Engineering', level: 'intermediate' },
+    { name: 'Rapid Prototyping', category: 'Engineering', level: 'intermediate' },
+    { name: 'Optimization', category: 'Performance', level: 'intermediate' },
+    { name: 'Telemetry', category: 'Operations', level: 'intermediate' },
+  ],
+  projects: [
+    {
+      id: 'proj-flagship-placeholder',
+      title: 'Your Flagship Project',
+      description: 'Enter your project details in the Studio to see an interactive 3D blueprint generated here.',
+      tools: ['Modern Stack', 'Core Framework', 'Cloud Engine'],
+      metrics: 'Designed for production performance',
+      role: 'Lead Architect',
+      isAiIdea: false,
+    }
+  ],
+  education: [
+    {
+      id: 'edu-placeholder',
+      institution: 'Your University / Institution',
+      degree: 'Your Degree / Certification',
+      period: '2022 - Present',
+      score: 'Graduating Scholar',
+    }
+  ],
+  experiences: [],
+  certifications: [],
+  publications: [],
+  sectionVisibility: {
+    hero: true,
+    welcome: true,
+    about: true,
+    skills: true,
+    projects: true,
+    experience: false,
+    education: true,
+    certifications: false,
+    publications: false,
+    services: false,
+    testimonials: false,
+    contact: true
+  },
+  sectionOrder: ['hero', 'welcome', 'about', 'skills', 'projects', 'education', 'contact']
+});
+
 export const ROLE_PROFILES: Record<UserRole, PortfolioData> = {
   student: STUDENT_PROFILE,
   job_seeker: JOB_SEEKER_PROFILE,
   professional: PROFESSIONAL_PROFILE,
   freelancer: FREELANCER_PROFILE
 };
+

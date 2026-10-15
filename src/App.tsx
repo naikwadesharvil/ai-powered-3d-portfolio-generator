@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, Sliders } from 'lucide-react';
 import type { PortfolioData, UserRole } from './types/portfolio';
 import { normalizePortfolioData } from './types/portfolioSchema';
 import { ROLE_PROFILES } from './data/defaultProfiles';
@@ -67,6 +67,7 @@ export function App() {
   const setPortfolio = usePortfolioStore((s) => s.setPortfolio);
 
   const [isStudioOpen, setIsStudioOpen] = useState(false);
+  const [studioInitialStep, setStudioInitialStep] = useState<'details' | 'generate' | 'customize' | 'download_publish'>('details');
   const [isResumeOpen, setIsResumeOpen] = useState(false);
   const [StudioComponent, setStudioComponent] = useState<React.ComponentType<any> | null>(null);
   const [ResumeComponent, setResumeComponent] = useState<React.ComponentType<any> | null>(null);
@@ -301,6 +302,7 @@ export function App() {
             id="launch-studio-btn"
             data-testid="studio-launch-btn"
             onClick={() => {
+              setStudioInitialStep('details');
               setIsStudioOpen(true);
             }}
             style={{
@@ -321,6 +323,34 @@ export function App() {
           >
             <Sparkles size={14} />
             <span>STUDIO</span>
+          </button>
+
+          {/* Floating Edit Portfolio Button */}
+          <button
+            id="floating-edit-portfolio-btn"
+            data-testid="floating-edit-portfolio-btn"
+            onClick={() => {
+              setStudioInitialStep('customize');
+              setIsStudioOpen(true);
+            }}
+            title="Open Customize panel to edit theme, order & sections"
+            style={{
+              background: 'rgba(255, 255, 255, 0.08)',
+              border: '1px solid var(--accent-cyan)',
+              borderRadius: '9999px',
+              padding: '6px 12px',
+              color: '#fff',
+              fontFamily: 'var(--font-heading)',
+              fontSize: '0.75rem',
+              fontWeight: 700,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              cursor: 'pointer',
+            }}
+          >
+            <Sliders size={13} color="var(--accent-cyan)" />
+            <span>EDIT PORTFOLIO</span>
           </button>
 
           <div style={{ width: '1px', height: '16px', background: 'rgba(255,255,255,0.2)' }} />
@@ -377,18 +407,88 @@ export function App() {
             return order.map((sectionKey) => {
               if (sectionKey === 'hero' && activePortfolio.sectionVisibility.hero) {
                 return (
-                  <Hero3D
-                    portfolio={activePortfolio}
-                    key="hero"
-                    onOpenStudio={() => {
-                      if (isSlugRoute) {
-                        window.location.href = '/';
-                      } else {
-                        setIsStudioOpen(true);
-                      }
-                    }}
-                    isPublicPage={isSlugRoute}
-                  />
+                  <React.Fragment key="hero-group">
+                    <Hero3D
+                      portfolio={activePortfolio}
+                      key="hero"
+                      onOpenStudio={() => {
+                        if (isSlugRoute) {
+                          window.location.href = '/';
+                        } else {
+                          setStudioInitialStep('details');
+                          setIsStudioOpen(true);
+                        }
+                      }}
+                      isPublicPage={isSlugRoute}
+                    />
+                    {/* How It Works Strip */}
+                    <div
+                      className="how-it-works-strip"
+                      style={{
+                        width: '100%',
+                        maxWidth: '1240px',
+                        margin: '0 auto 32px',
+                        padding: '0 24px',
+                        position: 'relative',
+                        zIndex: 15,
+                      }}
+                    >
+                      <div
+                        style={{
+                          background: 'rgba(5, 7, 12, 0.75)',
+                          border: '1px solid rgba(0, 242, 254, 0.2)',
+                          borderRadius: '12px',
+                          padding: '12px 20px',
+                          display: 'flex',
+                          flexWrap: 'wrap',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          gap: '12px',
+                          backdropFilter: 'blur(10px)',
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span
+                            style={{
+                              padding: '3px 8px',
+                              borderRadius: '4px',
+                              background: 'rgba(0, 242, 254, 0.15)',
+                              color: 'var(--accent-cyan)',
+                              fontFamily: 'var(--font-mono)',
+                              fontSize: '0.68rem',
+                              fontWeight: 700,
+                              letterSpacing: '0.08em',
+                            }}
+                          >
+                            HOW IT WORKS
+                          </span>
+                          <span style={{ color: 'rgba(255, 255, 255, 0.85)', fontSize: '0.82rem' }}>
+                            1. Enter your details <span style={{ color: 'var(--accent-cyan)' }}>→</span> 2. AI generates 3D hologram & blueprints <span style={{ color: 'var(--accent-cyan)' }}>→</span> 3. Customize & publish your live link
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setStudioInitialStep('details');
+                            setIsStudioOpen(true);
+                          }}
+                          style={{
+                            background: 'transparent',
+                            border: '1px solid var(--accent-cyan)',
+                            color: 'var(--accent-cyan)',
+                            fontFamily: 'var(--font-mono)',
+                            fontSize: '0.72rem',
+                            fontWeight: 600,
+                            padding: '4px 12px',
+                            borderRadius: '6px',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          Launch Studio
+                        </button>
+                      </div>
+                    </div>
+                  </React.Fragment>
                 );
               }
               if (sectionKey === 'welcome' && activePortfolio.sectionVisibility.welcome) {
@@ -437,6 +537,7 @@ export function App() {
       {!isSlugRoute && isStudioOpen && StudioComponent && (
         <StudioComponent
           isOpen={isStudioOpen}
+          initialStep={studioInitialStep}
           onClose={() => setIsStudioOpen(false)}
           portfolio={portfolio}
           onUpdatePortfolio={handleUpdatePortfolio}

@@ -28,6 +28,8 @@ import {
   Loader2,
   Key,
   Eye,
+  Layout,
+  Palette,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import {
@@ -73,6 +75,7 @@ interface CreatorStudioProps {
   previewMode: 'desktop' | 'tablet' | 'mobile';
   onChangePreviewMode: (mode: 'desktop' | 'tablet' | 'mobile') => void;
   onOpenResume?: () => void;
+  initialStep?: StepperStep;
 }
 
 const CreatorStudio: React.FC<CreatorStudioProps> = ({
@@ -83,11 +86,18 @@ const CreatorStudio: React.FC<CreatorStudioProps> = ({
   previewMode,
   onChangePreviewMode,
   onOpenResume,
+  initialStep,
 }) => {
   // 4-Step Stepper Flow: Details -> Generate -> Customize -> Download/Publish
-  const [currentStep, setCurrentStep] = useState<StepperStep>('details');
+  const [currentStep, setCurrentStep] = useState<StepperStep>(initialStep || 'details');
   const [history, setHistory] = useState<PortfolioData[]>([portfolio]);
   const [future, setFuture] = useState<PortfolioData[]>([]);
+
+  useEffect(() => {
+    if (initialStep) {
+      setCurrentStep(initialStep);
+    }
+  }, [initialStep]);
 
   // Synchronize Zustand portfolioStore when CreatorStudio opens with an external profile
   useEffect(() => {
@@ -147,30 +157,43 @@ const CreatorStudio: React.FC<CreatorStudioProps> = ({
   // Computed Discipline Config from config/disciplines.ts
   const activeDiscipline: DisciplineConfig = getDisciplineConfig(selectedBranch, customBranchName);
 
+  const isDemoOrPlaceholder = !portfolio.isGenerated || portfolio.name === 'Sharvil Naikwade' || portfolio.name === 'Your Name';
+
   // Personal Info State
-  const [autopilotName, setAutopilotName] = useState(portfolio.name);
-  const [autopilotInterests, setAutopilotInterests] = useState(portfolio.interests.join(', '));
-  const [autopilotRole, setAutopilotRole] = useState<UserRole>(portfolio.role);
-  const [userLocation, setUserLocation] = useState(portfolio.location || '');
-  const [userEmail, setUserEmail] = useState(portfolio.email || '');
+  const [autopilotName, setAutopilotName] = useState(isDemoOrPlaceholder ? '' : portfolio.name);
+  const [autopilotInterests, setAutopilotInterests] = useState(isDemoOrPlaceholder ? '' : (portfolio.interests || []).join(', '));
+  const [autopilotRole, setAutopilotRole] = useState<UserRole>(portfolio.role || 'job_seeker');
+  const [userLocation, setUserLocation] = useState(isDemoOrPlaceholder ? '' : (portfolio.location || ''));
+  const [userEmail, setUserEmail] = useState(isDemoOrPlaceholder ? '' : (portfolio.email || ''));
+  const [targetRoleInput, setTargetRoleInput] = useState(isDemoOrPlaceholder ? '' : (portfolio.targetRole || portfolio.tagline || ''));
+  const [bioInput, setBioInput] = useState(isDemoOrPlaceholder ? '' : (portfolio.shortBio || portfolio.fullBio || ''));
 
   // Sub-tabs for Step 1 (Details)
   const [detailsSubTab, setDetailsSubTab] = useState<'persona_discipline' | 'skills' | 'projects' | 'education' | 'experience'>('persona_discipline');
 
   // Interactive Skills State
-  const [skillsList, setSkillsList] = useState<TechSkill[]>(portfolio.skills || []);
+  const [skillsList, setSkillsList] = useState<TechSkill[]>(isDemoOrPlaceholder ? [] : (portfolio.skills || []));
   const [newSkillName, setNewSkillName] = useState('');
+  const [suggestedExtraSkills, setSuggestedExtraSkills] = useState<string[]>([]);
+  const [isSuggestingSkills, setIsSuggestingSkills] = useState(false);
 
   // Interactive Projects State
-  const [projectsList, setProjectsList] = useState<ProjectItem[]>(portfolio.projects || []);
+  const [projectsList, setProjectsList] = useState<ProjectItem[]>(isDemoOrPlaceholder ? [] : (portfolio.projects || []));
   const [isAddingProject, setIsAddingProject] = useState(false);
   const [newProjTitle, setNewProjTitle] = useState('');
   const [newProjDesc, setNewProjDesc] = useState('');
   const [newProjTags, setNewProjTags] = useState('');
   const [newProjMetrics, setNewProjMetrics] = useState('');
 
+  // AI Suggestions and Rewrites State
+  const [bioAiSuggestion, setBioAiSuggestion] = useState<{ text: string; isAi: boolean } | null>(null);
+  const [isRewritingBio, setIsRewritingBio] = useState(false);
+  const [projAiSuggestion, setProjAiSuggestion] = useState<{ text: string; isAi: boolean } | null>(null);
+  const [isRewritingProj, setIsRewritingProj] = useState(false);
+  const [aiHelperNotice, setAiHelperNotice] = useState<string | null>(null);
+
   // Interactive Education State
-  const [educationList, setEducationList] = useState<EducationItem[]>(portfolio.education || []);
+  const [educationList, setEducationList] = useState<EducationItem[]>(isDemoOrPlaceholder ? [] : (portfolio.education || []));
   const [isAddingEdu, setIsAddingEdu] = useState(false);
   const [newEduInst, setNewEduInst] = useState('');
   const [newEduDegree, setNewEduDegree] = useState('');
@@ -178,12 +201,221 @@ const CreatorStudio: React.FC<CreatorStudioProps> = ({
   const [newEduScore, setNewEduScore] = useState('');
 
   // Interactive Experience State
-  const [experienceList, setExperienceList] = useState<ExperienceItem[]>(portfolio.experiences || []);
+  const [experienceList, setExperienceList] = useState<ExperienceItem[]>(isDemoOrPlaceholder ? [] : (portfolio.experiences || []));
   const [isAddingExp, setIsAddingExp] = useState(false);
   const [newExpCompany, setNewExpCompany] = useState('');
   const [newExpRole, setNewExpRole] = useState('');
   const [newExpPeriod, setNewExpPeriod] = useState('');
   const [newExpPoints, setNewExpPoints] = useState('');
+
+  // Handlers for Try an example & Start over
+  const handleTryExample = () => {
+    setAutopilotName('Priya Sharma');
+    setUserEmail('priya.sharma@engineer.io');
+    setUserLocation('Bengaluru, India');
+    setTargetRoleInput('Senior Fullstack Engineer & Distributed Systems Architect');
+    setBioInput('Passionate engineer with 4+ years architecting high-throughput cloud platforms and resilient web applications.');
+    setAutopilotInterests('Distributed Systems, High-Concurrency APIs, Cloud Infrastructure, Real-time 3D Telemetry');
+    setSelectedBranch('cs_it');
+    setSkillsList([
+      { name: 'TypeScript', category: 'Languages', level: 'expert' },
+      { name: 'React', category: 'Frontend', level: 'expert' },
+      { name: 'Node.js', category: 'Backend', level: 'advanced' },
+      { name: 'PostgreSQL', category: 'Databases', level: 'advanced' },
+      { name: 'Docker', category: 'DevOps', level: 'advanced' },
+      { name: 'Kubernetes', category: 'Cloud', level: 'intermediate' },
+    ]);
+    setProjectsList([
+      {
+        id: 'proj-ex-1',
+        title: 'Distributed Event Streaming Engine',
+        description: 'Engineered a low-latency messaging mesh handling 120,000 events/sec with sub-5ms p99 latency.',
+        tags: ['Go', 'Kafka', 'Docker', 'Redis'],
+        metrics: '120k events/sec • <5ms p99',
+        demoUrl: 'https://github.com',
+        githubUrl: 'https://github.com',
+        isAiIdea: false,
+      },
+      {
+        id: 'proj-ex-2',
+        title: 'Real-time 3D Analytics Dashboard',
+        description: 'Constructed an interactive telemetry visualization tool supporting 50+ concurrent real-time nodes.',
+        tags: ['React', 'Three.js', 'WebGL', 'TypeScript'],
+        metrics: '60 FPS • 50+ nodes',
+        demoUrl: 'https://github.com',
+        githubUrl: 'https://github.com',
+        isAiIdea: false,
+      },
+    ]);
+    setExperienceList([
+      {
+        id: 'exp-ex-1',
+        company: 'CloudScale Technologies',
+        role: 'Senior Systems Engineer',
+        period: '2023 – Present',
+        points: ['Engineered core microservices architecture with 99.99% uptime', 'Reduced p95 API response times by 42%'],
+        isVerified: true,
+      },
+    ]);
+    setEducationList([
+      {
+        id: 'edu-ex-1',
+        institution: 'Indian Institute of Information Technology',
+        degree: 'B.Tech in Computer Science & Engineering',
+        period: '2019 – 2023',
+        score: '8.8 / 10 CGPA',
+        details: 'Specialization in Software Architecture & Distributed Systems',
+      },
+    ]);
+  };
+
+  const handleStartOver = () => {
+    if (window.confirm('Start over with a fresh portfolio? This will clear all entered details and reset saved customization.')) {
+      usePortfolioStore.getState().resetPortfolio();
+      setAutopilotName('');
+      setUserEmail('');
+      setUserLocation('');
+      setTargetRoleInput('');
+      setBioInput('');
+      setAutopilotInterests('');
+      setSkillsList([]);
+      setProjectsList([]);
+      setEducationList([]);
+      setExperienceList([]);
+      setCurrentStep('details');
+      setDetailsSubTab('persona_discipline');
+    }
+  };
+
+  // AI Suggestion Helpers for Form
+  const handleSuggestTargetRole = () => {
+    const suggested = `${activeDiscipline.shortName} Specialist & Engineer`;
+    setTargetRoleInput(suggested);
+  };
+
+  const handleSuggestBio = () => {
+    const disciplineLabel = activeDiscipline.shortName || 'Software Engineering';
+    const coreSkills = skillsList.slice(0, 3).map((s) => s.name).join(', ') || 'modern engineering';
+    const draft = `${autopilotName.trim() || 'Engineer'} specializing in ${disciplineLabel} with technical depth in ${coreSkills}. Focused on architecting scalable systems and verified measurable outcomes.`;
+    setBioInput(draft);
+  };
+
+  const handleImproveBioWithAi = async () => {
+    const textToImprove = bioInput.trim() || `${autopilotName || 'Engineer'} specializing in ${activeDiscipline.shortName} and scalable distributed architectures.`;
+    setIsRewritingBio(true);
+    setAiHelperNotice(null);
+    try {
+      const res = await AiApiClient.rewriteSection({
+        section: 'summary',
+        content: textToImprove,
+        tone: 'professional',
+        role: autopilotRole,
+      });
+      setBioAiSuggestion({
+        text: typeof res.rewritten === 'string' ? res.rewritten : textToImprove,
+        isAi: res.liveAi,
+      });
+      if (!res.liveAi) {
+        setAiHelperNotice('Offline heuristic engine applied.');
+      }
+    } catch {
+      setBioAiSuggestion({
+        text: `${textToImprove} — Delivers verified performance benchmarks and operational reliability.`,
+        isAi: false,
+      });
+      setAiHelperNotice('Offline fallback applied.');
+    } finally {
+      setIsRewritingBio(false);
+    }
+  };
+
+  const handleImproveProjectDescWithAi = async () => {
+    if (!newProjDesc.trim()) return;
+    setIsRewritingProj(true);
+    try {
+      const res = await AiApiClient.rewriteSection({
+        section: 'projects',
+        content: newProjDesc,
+        tone: 'impactful',
+        role: autopilotRole,
+      });
+      setProjAiSuggestion({
+        text: typeof res.rewritten === 'string' ? res.rewritten : newProjDesc,
+        isAi: res.liveAi,
+      });
+    } catch {
+      setProjAiSuggestion({
+        text: `${newProjDesc} [Optimized throughput, reduced latency by 35%, and verified zero downtime.]`,
+        isAi: false,
+      });
+    } finally {
+      setIsRewritingProj(false);
+    }
+  };
+
+  const handleSuggestMoreSkills = () => {
+    setIsSuggestingSkills(true);
+    const existingNames = new Set(skillsList.map((s) => s.name.toLowerCase()));
+    const extras: string[] = [];
+    activeDiscipline.skillCategories.forEach((cat) => {
+      cat.skills.forEach((s) => {
+        if (!existingNames.has(s.toLowerCase())) {
+          extras.push(s);
+        }
+      });
+    });
+    ['Docker', 'PostgreSQL', 'Redis', 'CI/CD Pipelines', 'System Design', 'Git'].forEach((s) => {
+      if (!existingNames.has(s.toLowerCase()) && !extras.includes(s)) {
+        extras.push(s);
+      }
+    });
+    setSuggestedExtraSkills(extras.slice(0, 8));
+    setIsSuggestingSkills(false);
+  };
+
+  // Profile Strength & Checklist
+  const profileStrength = React.useMemo(() => {
+    let score = 0;
+    const tips: string[] = [];
+
+    if (autopilotName.trim()) score += 20;
+    else tips.push('Add your full name');
+
+    if (targetRoleInput.trim() || autopilotRole) score += 15;
+    else tips.push('Specify target role');
+
+    if (bioInput.trim()) score += 15;
+    else tips.push('Add a summary/bio');
+
+    if (skillsList.length >= 3) score += 20;
+    else if (skillsList.length > 0) { score += 10; tips.push('Add 3+ skills'); }
+    else tips.push('Add technical skills');
+
+    if (projectsList.length >= 1) score += 15;
+    else tips.push('Add a project');
+
+    if (experienceList.length >= 1 || educationList.length >= 1) score += 15;
+    else tips.push('Add experience/education');
+
+    return {
+      percentage: Math.min(100, score),
+      tips: tips.slice(0, 2),
+    };
+  }, [autopilotName, targetRoleInput, autopilotRole, bioInput, skillsList.length, projectsList.length, experienceList.length, educationList.length]);
+
+  // Live Publishing State (Phase 6 & 7)
+  const [publishStatus, setPublishStatus] = useState<'idle' | 'publishing' | 'published' | 'error'>('idle');
+  const [publishedSlug, setPublishedSlug] = useState<string | null>(null);
+  const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
+  const [publishError, setPublishError] = useState<string | null>(null);
+  const [imageWarnings, setImageWarnings] = useState<string[]>([]);
+  const [isUnpublishing, setIsUnpublishing] = useState(false);
+  const [copiedPublishLink, setCopiedPublishLink] = useState(false);
+  const [newlyIssuedToken, setNewlyIssuedToken] = useState<string | null>(null);
+  const [copiedOwnerToken, setCopiedOwnerToken] = useState(false);
+  const [showTokenInput, setShowTokenInput] = useState(false);
+  const [manualTokenInput, setManualTokenInput] = useState('');
+  const [tokenFeedback, setTokenFeedback] = useState<string | null>(null);
 
   // Generation Status & Progress State
   const [isGenerating, setIsGenerating] = useState(false);
@@ -202,19 +434,26 @@ const CreatorStudio: React.FC<CreatorStudioProps> = ({
   // Public ZIP State
   const [exportingZip, setExportingZip] = useState(false);
 
-  // Live Publishing State (Phase 6 & 7)
-  const [publishStatus, setPublishStatus] = useState<'idle' | 'publishing' | 'published' | 'error'>('idle');
-  const [publishedSlug, setPublishedSlug] = useState<string | null>(null);
-  const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
-  const [publishError, setPublishError] = useState<string | null>(null);
-  const [imageWarnings, setImageWarnings] = useState<string[]>([]);
-  const [isUnpublishing, setIsUnpublishing] = useState(false);
-  const [copiedPublishLink, setCopiedPublishLink] = useState(false);
-  const [newlyIssuedToken, setNewlyIssuedToken] = useState<string | null>(null);
-  const [copiedOwnerToken, setCopiedOwnerToken] = useState(false);
-  const [showTokenInput, setShowTokenInput] = useState(false);
-  const [manualTokenInput, setManualTokenInput] = useState('');
-  const [tokenFeedback, setTokenFeedback] = useState<string | null>(null);
+  const checklist = React.useMemo(() => {
+    const isDetailsDone = !!(autopilotName.trim() && (skillsList.length > 0 || projectsList.length > 0));
+    const isGenerateDone = Boolean(portfolio.isGenerated && portfolio.name && portfolio.name !== 'Your Name');
+    const isCustomizeDone = isGenerateDone;
+    const isResumeDone = false;
+    const isPublishDone = publishStatus === 'published' || !!publishedSlug;
+
+    return [
+      { id: 1, label: 'Enter details', step: 'details' as StepperStep, done: isDetailsDone },
+      { id: 2, label: 'Generate', step: 'generate' as StepperStep, done: isGenerateDone },
+      { id: 3, label: 'Customize', step: 'customize' as StepperStep, done: isCustomizeDone },
+      { id: 4, label: 'Download resume', step: 'download_publish' as StepperStep, done: isResumeDone },
+      { id: 5, label: 'Publish', step: 'download_publish' as StepperStep, done: isPublishDone },
+    ];
+  }, [autopilotName, skillsList.length, projectsList.length, portfolio.isGenerated, portfolio.name, publishStatus, publishedSlug]);
+
+  const nextChecklistStep = React.useMemo(() => {
+    const nextItem = checklist.find((item) => !item.done);
+    return nextItem ? nextItem.step : 'customize';
+  }, [checklist]);
 
   // Initialize published slug & owner token from localStorage on open
   useEffect(() => {
@@ -436,7 +675,7 @@ const CreatorStudio: React.FC<CreatorStudioProps> = ({
     if (forceOffline) {
       setIsGenerating(true);
       setGenerationError(null);
-      const fallbackPortfolio = AiEngine.generatePortfolioFromAutopilot({
+      const fallbackRaw = AiEngine.generatePortfolioFromAutopilot({
         name: autopilotName.trim(),
         branch: selectedBranch as EducationBranch,
         customBranchName: selectedBranch === 'other' ? customBranchName : undefined,
@@ -446,10 +685,28 @@ const CreatorStudio: React.FC<CreatorStudioProps> = ({
         projects: projectsList,
         education: educationList,
         experiences: experienceList,
+        currentProfile: {
+          ...portfolio,
+          location: userLocation,
+          email: userEmail,
+          targetRole: targetRoleInput.trim() || portfolio.targetRole || '',
+          tagline: targetRoleInput.trim() || portfolio.tagline || '',
+          shortBio: bioInput.trim() || portfolio.shortBio || '',
+          fullBio: bioInput.trim() || portfolio.fullBio || '',
+        },
       });
+      const fallbackPortfolio: PortfolioData = {
+        ...fallbackRaw,
+        isGenerated: true,
+        targetRole: targetRoleInput.trim() || fallbackRaw.targetRole,
+        tagline: targetRoleInput.trim() || fallbackRaw.tagline,
+        shortBio: bioInput.trim() || fallbackRaw.shortBio,
+        fullBio: bioInput.trim() || fallbackRaw.fullBio,
+      };
       setHistory((prev) => [...prev, fallbackPortfolio]);
       setFuture([]);
       onUpdatePortfolio(fallbackPortfolio);
+      usePortfolioStore.getState().setPortfolio(fallbackPortfolio, true);
       setSkillsList(fallbackPortfolio.skills);
       setProjectsList(fallbackPortfolio.projects);
       setEducationList(fallbackPortfolio.education);
@@ -528,6 +785,10 @@ const CreatorStudio: React.FC<CreatorStudioProps> = ({
           ...portfolio,
           location: userLocation,
           email: userEmail,
+          targetRole: targetRoleInput.trim() || portfolio.targetRole || '',
+          tagline: targetRoleInput.trim() || portfolio.tagline || '',
+          shortBio: bioInput.trim() || portfolio.shortBio || '',
+          fullBio: bioInput.trim() || portfolio.fullBio || '',
         },
       });
 
@@ -537,15 +798,25 @@ const CreatorStudio: React.FC<CreatorStudioProps> = ({
       setGenerationStep('Assembling 3D telemetry and Bento statistics...');
 
       // Save to undo history, clear redo stack
-      setHistory((prev) => [...prev, result.portfolio]);
+      const finalPortfolio: PortfolioData = {
+        ...result.portfolio,
+        name: autopilotName.trim() || result.portfolio.name,
+        targetRole: targetRoleInput.trim() || result.portfolio.targetRole,
+        tagline: targetRoleInput.trim() || result.portfolio.tagline,
+        shortBio: bioInput.trim() || result.portfolio.shortBio,
+        fullBio: bioInput.trim() || result.portfolio.fullBio,
+        isGenerated: true,
+      };
+      setHistory((prev) => [...prev, finalPortfolio]);
       setFuture([]);
-      onUpdatePortfolio(result.portfolio);
+      onUpdatePortfolio(finalPortfolio);
+      usePortfolioStore.getState().setPortfolio(finalPortfolio, true);
 
       // Synchronize internal lists with the generated portfolio
-      setSkillsList(result.portfolio.skills);
-      setProjectsList(result.portfolio.projects);
-      setEducationList(result.portfolio.education);
-      setExperienceList(result.portfolio.experiences);
+      setSkillsList(finalPortfolio.skills);
+      setProjectsList(finalPortfolio.projects);
+      setEducationList(finalPortfolio.education);
+      setExperienceList(finalPortfolio.experiences);
 
       setGenerationMeta({
         liveAi: result.liveAi,
@@ -897,6 +1168,29 @@ const CreatorStudio: React.FC<CreatorStudioProps> = ({
             </button>
 
             <button
+              onClick={handleStartOver}
+              title="Start over with a fresh portfolio (clears saved draft)"
+              style={{
+                background: 'rgba(255, 0, 85, 0.1)',
+                border: '1px solid rgba(255, 0, 85, 0.3)',
+                borderRadius: '8px',
+                padding: '8px 12px',
+                color: '#ff6688',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                fontFamily: 'var(--font-mono)',
+                fontSize: '0.75rem',
+                fontWeight: 600,
+              }}
+            >
+              <RotateCcw size={14} />
+              <span>START OVER</span>
+            </button>
+
+            <button
+              id="close-studio-btn"
               onClick={onClose}
               style={{
                 background: 'rgba(255, 255, 255, 0.08)',
@@ -912,6 +1206,271 @@ const CreatorStudio: React.FC<CreatorStudioProps> = ({
               }}
             >
               <X size={18} />
+            </button>
+          </div>
+        </div>
+
+        {/* ========================================================================= */}
+        {/* TASK 3: SIMPLE STUDIO DASHBOARD */}
+        {/* ========================================================================= */}
+        <div
+          id="studio-dashboard"
+          data-testid="studio-dashboard"
+          style={{
+            background: 'linear-gradient(180deg, rgba(7, 11, 20, 0.95) 0%, rgba(4, 7, 14, 0.85) 100%)',
+            borderBottom: '1px solid rgba(0, 242, 254, 0.2)',
+            padding: '16px 24px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '14px',
+          }}
+        >
+          {/* Top row: Status header + Continue button */}
+          <div
+            style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '12px',
+            }}
+          >
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '0.68rem',
+                    letterSpacing: '0.12em',
+                    color: 'var(--accent-cyan)',
+                    background: 'rgba(0, 242, 254, 0.1)',
+                    border: '1px solid rgba(0, 242, 254, 0.3)',
+                    padding: '2px 8px',
+                    borderRadius: '4px',
+                    fontWeight: 700,
+                  }}
+                >
+                  STUDIO DASHBOARD
+                </span>
+                <span style={{ fontSize: '0.8rem', color: '#fff', fontWeight: 600 }}>
+                  {portfolio.isGenerated && portfolio.name && portfolio.name !== 'Your Name'
+                    ? `${portfolio.name} // Active 3D Blueprint`
+                    : 'New Visitor // Ready to Build'}
+                </span>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <button
+                id="dashboard-continue-btn"
+                data-testid="dashboard-continue-btn"
+                type="button"
+                onClick={() => setCurrentStep(nextChecklistStep)}
+                style={{
+                  background: 'linear-gradient(135deg, var(--accent-cyan) 0%, var(--accent-magenta) 100%)',
+                  color: '#000',
+                  border: 'none',
+                  borderRadius: '999px',
+                  padding: '7px 18px',
+                  fontFamily: 'var(--font-heading)',
+                  fontSize: '0.78rem',
+                  fontWeight: 800,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  cursor: 'pointer',
+                  boxShadow: '0 0 20px rgba(0, 242, 254, 0.35)',
+                }}
+              >
+                <span>Continue to {checklist.find((c) => !c.done)?.label || 'Customize'}</span>
+                <ArrowRight size={14} />
+              </button>
+            </div>
+          </div>
+
+          {/* Progress Checklist row */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: '8px 12px',
+            }}
+          >
+            {checklist.map((item) => (
+              <div
+                key={item.id}
+                onClick={() => setCurrentStep(item.step)}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '4px 10px',
+                  borderRadius: '999px',
+                  background: item.done ? 'rgba(0, 255, 136, 0.12)' : 'rgba(255, 255, 255, 0.04)',
+                  border: item.done ? '1px solid rgba(0, 255, 136, 0.4)' : '1px solid rgba(255, 255, 255, 0.1)',
+                  cursor: 'pointer',
+                  fontSize: '0.72rem',
+                  fontFamily: 'var(--font-mono)',
+                  color: item.done ? '#00ff88' : 'rgba(255, 255, 255, 0.65)',
+                  transition: 'all 0.2s ease',
+                }}
+              >
+                {item.done ? (
+                  <CheckCircle2 size={13} color="#00ff88" />
+                ) : (
+                  <span
+                    style={{
+                      width: '13px',
+                      height: '13px',
+                      borderRadius: '50%',
+                      border: '1px solid rgba(255, 255, 255, 0.4)',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '0.6rem',
+                    }}
+                  >
+                    {item.id}
+                  </span>
+                )}
+                <span>{item.label}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Quick-Action Cards: Edit details, Change theme, Reorder sections, Download resume, Publish */}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
+              gap: '8px',
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => {
+                setCurrentStep('details');
+                setDetailsSubTab('persona_discipline');
+              }}
+              style={{
+                background: currentStep === 'details' ? 'rgba(0, 242, 254, 0.15)' : 'rgba(255, 255, 255, 0.03)',
+                border: currentStep === 'details' ? '1px solid var(--accent-cyan)' : '1px solid rgba(255, 255, 255, 0.08)',
+                borderRadius: '8px',
+                padding: '10px 12px',
+                color: '#fff',
+                textAlign: 'left',
+                cursor: 'pointer',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '4px',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Compass size={13} color="var(--accent-cyan)" />
+                <span style={{ fontSize: '0.78rem', fontWeight: 700, fontFamily: 'var(--font-heading)' }}>Edit details</span>
+              </div>
+              <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)' }}>Bio, roles & skills</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setCurrentStep('customize');
+              }}
+              style={{
+                background: currentStep === 'customize' ? 'rgba(0, 242, 254, 0.15)' : 'rgba(255, 255, 255, 0.03)',
+                border: currentStep === 'customize' ? '1px solid var(--accent-cyan)' : '1px solid rgba(255, 255, 255, 0.08)',
+                borderRadius: '8px',
+                padding: '10px 12px',
+                color: '#fff',
+                textAlign: 'left',
+                cursor: 'pointer',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '4px',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Palette size={13} color="var(--accent-cyan)" />
+                <span style={{ fontSize: '0.78rem', fontWeight: 700, fontFamily: 'var(--font-heading)' }}>Change theme</span>
+              </div>
+              <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)' }}>6 preset styles</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setCurrentStep('customize');
+              }}
+              style={{
+                background: currentStep === 'customize' ? 'rgba(0, 242, 254, 0.15)' : 'rgba(255, 255, 255, 0.03)',
+                border: currentStep === 'customize' ? '1px solid var(--accent-cyan)' : '1px solid rgba(255, 255, 255, 0.08)',
+                borderRadius: '8px',
+                padding: '10px 12px',
+                color: '#fff',
+                textAlign: 'left',
+                cursor: 'pointer',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '4px',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Layout size={13} color="var(--accent-cyan)" />
+                <span style={{ fontSize: '0.78rem', fontWeight: 700, fontFamily: 'var(--font-heading)' }}>Reorder sections</span>
+              </div>
+              <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)' }}>Drag & drop flow</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setCurrentStep('download_publish');
+              }}
+              style={{
+                background: 'rgba(255, 255, 255, 0.03)',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                borderRadius: '8px',
+                padding: '10px 12px',
+                color: '#fff',
+                textAlign: 'left',
+                cursor: 'pointer',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '4px',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Download size={13} color="var(--accent-cyan)" />
+                <span style={{ fontSize: '0.78rem', fontWeight: 700, fontFamily: 'var(--font-heading)' }}>Download resume</span>
+              </div>
+              <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)' }}>PDF, Word & MD</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setCurrentStep('download_publish');
+              }}
+              style={{
+                background: currentStep === 'download_publish' ? 'rgba(0, 242, 254, 0.15)' : 'rgba(255, 255, 255, 0.03)',
+                border: currentStep === 'download_publish' ? '1px solid var(--accent-cyan)' : '1px solid rgba(255, 255, 255, 0.08)',
+                borderRadius: '8px',
+                padding: '10px 12px',
+                color: '#fff',
+                textAlign: 'left',
+                cursor: 'pointer',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '4px',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Globe size={13} color="var(--accent-cyan)" />
+                <span style={{ fontSize: '0.78rem', fontWeight: 700, fontFamily: 'var(--font-heading)' }}>Publish</span>
+              </div>
+              <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)' }}>Live public link</span>
             </button>
           </div>
         </div>
@@ -1043,9 +1602,82 @@ const CreatorStudio: React.FC<CreatorStudioProps> = ({
                 >
                   Step 1: Enter Your Background & Verified Details
                 </h3>
-                <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', lineHeight: 1.5 }}>
-                  Select your Persona and Engineering Discipline. Enter your verified qualifications, skills, and projects without code.
-                </p>
+              </div>
+              {/* Profile Strength & Quick Example Strip */}
+              <div
+                style={{
+                  background: 'rgba(5, 7, 12, 0.75)',
+                  border: '1px solid rgba(0, 242, 254, 0.25)',
+                  borderRadius: '12px',
+                  padding: '14px 18px',
+                  marginBottom: '20px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '10px',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--accent-cyan)', fontWeight: 700 }}>
+                      PROFILE STRENGTH: {profileStrength.percentage}%
+                    </span>
+                    <span style={{ fontSize: '0.72rem', color: 'rgba(255, 255, 255, 0.75)' }}>
+                      {profileStrength.tips.length > 0 ? `Next tip: ${profileStrength.tips.join(' • ')}` : 'Profile complete & ready for 3D synthesis!'}
+                    </span>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <button
+                      id="try-example-btn"
+                      data-testid="try-example-btn"
+                      type="button"
+                      onClick={handleTryExample}
+                      style={{
+                        background: 'rgba(0, 242, 254, 0.1)',
+                        border: '1px solid var(--accent-cyan)',
+                        borderRadius: '6px',
+                        padding: '4px 12px',
+                        color: 'var(--accent-cyan)',
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: '0.72rem',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Try an example
+                    </button>
+                    <button
+                      id="start-over-btn"
+                      data-testid="start-over-btn"
+                      type="button"
+                      onClick={handleStartOver}
+                      style={{
+                        background: 'transparent',
+                        border: '1px solid rgba(255, 0, 85, 0.3)',
+                        borderRadius: '6px',
+                        padding: '4px 10px',
+                        color: 'rgba(255, 100, 130, 0.9)',
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: '0.72rem',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Start over
+                    </button>
+                  </div>
+                </div>
+
+                {/* Progress bar line */}
+                <div style={{ width: '100%', height: '5px', background: 'rgba(255, 255, 255, 0.08)', borderRadius: '3px', overflow: 'hidden' }}>
+                  <div
+                    style={{
+                      width: `${profileStrength.percentage}%`,
+                      height: '100%',
+                      background: 'linear-gradient(90deg, var(--accent-cyan), var(--accent-magenta))',
+                      transition: 'width 0.4s ease',
+                    }}
+                  />
+                </div>
               </div>
 
               {/* Sub-Tabs for Details */}
@@ -1348,6 +1980,187 @@ const CreatorStudio: React.FC<CreatorStudioProps> = ({
                     </div>
                   </div>
 
+                  {/* Target Role & Headline with Helper and Suggest button */}
+                  <div>
+                    <label style={{ display: 'block', fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'rgba(255,255,255,0.7)', marginBottom: '6px' }}>
+                      TARGET ROLE / HEADLINE
+                    </label>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <input
+                        type="text"
+                        value={targetRoleInput}
+                        onChange={(e) => setTargetRoleInput(e.target.value)}
+                        placeholder="e.g. Senior Fullstack Engineer & Distributed Systems Architect"
+                        style={{
+                          flex: 1,
+                          padding: '12px 16px',
+                          background: 'rgba(5, 7, 11, 0.8)',
+                          border: '1px solid rgba(255, 255, 255, 0.15)',
+                          borderRadius: '8px',
+                          color: '#fff',
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={handleSuggestTargetRole}
+                        style={{
+                          background: 'rgba(0, 242, 254, 0.1)',
+                          border: '1px solid var(--accent-cyan)',
+                          borderRadius: '8px',
+                          padding: '0 14px',
+                          color: 'var(--accent-cyan)',
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: '0.75rem',
+                          cursor: 'pointer',
+                          whiteSpace: 'nowrap',
+                          fontWeight: 600,
+                        }}
+                      >
+                        Suggest
+                      </button>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '6px', fontSize: '0.72rem', color: 'rgba(255, 255, 255, 0.55)' }}>
+                      <span>Example: Senior {activeDiscipline.shortName} Engineer • Click Suggest to autofill recommended title</span>
+                    </div>
+                  </div>
+
+                  {/* Professional Summary / Bio with AI Suggest & Rewrite */}
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                      <label style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'rgba(255,255,255,0.7)' }}>
+                        PROFESSIONAL SUMMARY / BIO
+                      </label>
+                      <div style={{ display: 'flex', gap: '6px' }}>
+                        <button
+                          type="button"
+                          onClick={handleSuggestBio}
+                          style={{
+                            background: 'rgba(255, 255, 255, 0.05)',
+                            border: '1px solid rgba(255, 255, 255, 0.15)',
+                            borderRadius: '6px',
+                            padding: '3px 10px',
+                            color: 'var(--accent-cyan)',
+                            fontFamily: 'var(--font-mono)',
+                            fontSize: '0.7rem',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          Suggest
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleImproveBioWithAi}
+                          disabled={isRewritingBio}
+                          style={{
+                            background: 'linear-gradient(135deg, rgba(0, 242, 254, 0.15), rgba(255, 0, 85, 0.15))',
+                            border: '1px solid var(--accent-cyan)',
+                            borderRadius: '6px',
+                            padding: '3px 10px',
+                            color: '#fff',
+                            fontFamily: 'var(--font-mono)',
+                            fontSize: '0.7rem',
+                            cursor: isRewritingBio ? 'wait' : 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                          }}
+                        >
+                          <Sparkles size={11} color="var(--accent-cyan)" />
+                          <span>{isRewritingBio ? 'Improving...' : 'Improve with AI'}</span>
+                        </button>
+                      </div>
+                    </div>
+                    <textarea
+                      rows={3}
+                      value={bioInput}
+                      onChange={(e) => setBioInput(e.target.value)}
+                      placeholder="Brief overview of your technical background, domain specialties, and key achievements..."
+                      style={{
+                        width: '100%',
+                        padding: '12px 16px',
+                        background: 'rgba(5, 7, 11, 0.8)',
+                        border: '1px solid rgba(255, 255, 255, 0.15)',
+                        borderRadius: '8px',
+                        color: '#fff',
+                        fontSize: '0.88rem',
+                        lineHeight: 1.5,
+                      }}
+                    />
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '6px', fontSize: '0.72rem', color: 'rgba(255, 255, 255, 0.55)' }}>
+                      <span>Tip: Mention primary discipline, core tools, and measurable achievements (no fake metrics).</span>
+                      {aiHelperNotice && (
+                        <span style={{ color: '#ffaa00', fontFamily: 'var(--font-mono)' }}>{aiHelperNotice}</span>
+                      )}
+                    </div>
+
+                    {/* AI Bio Suggestion with Accept / Dismiss */}
+                    {bioAiSuggestion && (
+                      <div
+                        style={{
+                          marginTop: '10px',
+                          padding: '12px 14px',
+                          background: 'rgba(0, 242, 254, 0.08)',
+                          border: '1px solid var(--accent-cyan)',
+                          borderRadius: '8px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '8px',
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--accent-cyan)', fontWeight: 700 }}>
+                            AI SUGGESTION ({bioAiSuggestion.isAi ? 'LIVE AI' : 'OFFLINE HEURISTIC'})
+                          </span>
+                          <div style={{ display: 'flex', gap: '6px' }}>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setBioInput(bioAiSuggestion.text);
+                                setBioAiSuggestion(null);
+                                setAiHelperNotice(null);
+                              }}
+                              style={{
+                                background: 'var(--accent-cyan)',
+                                border: 'none',
+                                borderRadius: '4px',
+                                padding: '3px 8px',
+                                color: '#000',
+                                fontFamily: 'var(--font-mono)',
+                                fontSize: '0.7rem',
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                              }}
+                            >
+                              Accept
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setBioAiSuggestion(null);
+                                setAiHelperNotice(null);
+                              }}
+                              style={{
+                                background: 'transparent',
+                                border: '1px solid rgba(255, 255, 255, 0.2)',
+                                borderRadius: '4px',
+                                padding: '3px 8px',
+                                color: 'rgba(255, 255, 255, 0.7)',
+                                fontFamily: 'var(--font-mono)',
+                                fontSize: '0.7rem',
+                                cursor: 'pointer',
+                              }}
+                            >
+                              Dismiss
+                            </button>
+                          </div>
+                        </div>
+                        <p style={{ margin: 0, fontSize: '0.82rem', color: '#fff', lineHeight: 1.4 }}>
+                          {bioAiSuggestion.text}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
                   {/* Areas of Interest */}
                   <div>
                     <label style={{ display: 'block', fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'rgba(255,255,255,0.7)', marginBottom: '6px' }}>
@@ -1509,12 +2322,72 @@ const CreatorStudio: React.FC<CreatorStudioProps> = ({
 
                   {/* Quick Skill Suggestions from config/disciplines.ts */}
                   <div style={{ padding: '18px', borderRadius: '12px', background: 'rgba(255, 255, 255, 0.02)', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
-                      <Lightbulb size={16} color="var(--accent-cyan)" />
-                      <span style={{ fontFamily: 'var(--font-heading)', fontWeight: 700, color: '#fff', fontSize: '0.9rem' }}>
-                        Industry Competencies for {activeDiscipline.label}:
-                      </span>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px', flexWrap: 'wrap', gap: '8px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Lightbulb size={16} color="var(--accent-cyan)" />
+                        <span style={{ fontFamily: 'var(--font-heading)', fontWeight: 700, color: '#fff', fontSize: '0.9rem' }}>
+                          Industry Competencies for {activeDiscipline.label}:
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleSuggestMoreSkills}
+                        disabled={isSuggestingSkills}
+                        style={{
+                          background: 'linear-gradient(135deg, rgba(0, 242, 254, 0.15), rgba(255, 0, 85, 0.15))',
+                          border: '1px solid var(--accent-cyan)',
+                          borderRadius: '6px',
+                          padding: '4px 12px',
+                          color: '#fff',
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: '0.72rem',
+                          cursor: isSuggestingSkills ? 'wait' : 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                        }}
+                      >
+                        <Sparkles size={11} color="var(--accent-cyan)" />
+                        <span>{isSuggestingSkills ? 'Analyzing...' : 'Suggest More Skills'}</span>
+                      </button>
                     </div>
+
+                    {/* AI Suggested More Skills Chips */}
+                    {suggestedExtraSkills.length > 0 && (
+                      <div style={{ marginBottom: '14px', padding: '10px 14px', background: 'rgba(0, 242, 254, 0.05)', borderRadius: '8px', border: '1px dashed var(--accent-cyan)' }}>
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.7rem', color: 'var(--accent-cyan)', display: 'block', marginBottom: '6px', fontWeight: 600 }}>
+                          AI SUGGESTED EXTENSIONS (CLICK TO ADD):
+                        </span>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                          {suggestedExtraSkills.map((extra) => {
+                            const isAdded = skillsList.some((s) => s.name.toLowerCase() === extra.toLowerCase());
+                            return (
+                              <button
+                                key={extra}
+                                type="button"
+                                onClick={() => {
+                                  if (!isAdded) {
+                                    setSkillsList([...skillsList, { name: extra, category: 'Engineering Tools', level: 'advanced' }]);
+                                  }
+                                }}
+                                style={{
+                                  background: isAdded ? 'rgba(0, 242, 254, 0.2)' : 'rgba(255, 255, 255, 0.08)',
+                                  border: isAdded ? '1px solid var(--accent-cyan)' : '1px solid rgba(255, 255, 255, 0.15)',
+                                  color: isAdded ? 'var(--accent-cyan)' : '#fff',
+                                  borderRadius: '6px',
+                                  padding: '3px 8px',
+                                  fontSize: '0.72rem',
+                                  fontFamily: 'var(--font-mono)',
+                                  cursor: 'pointer',
+                                }}
+                              >
+                                {isAdded ? '✓' : '+'} {extra}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
 
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                       {activeDiscipline.skillCategories.map((cat) => (
@@ -1615,6 +2488,34 @@ const CreatorStudio: React.FC<CreatorStudioProps> = ({
                         onChange={(e) => setNewProjTitle(e.target.value)}
                         style={{ padding: '10px 14px', background: '#020408', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '6px', color: '#fff' }}
                       />
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: '0.72rem', fontFamily: 'var(--font-mono)', color: 'rgba(255, 255, 255, 0.6)' }}>
+                          DESCRIPTION & ACTIONS (no invented facts)
+                        </span>
+                        <button
+                          type="button"
+                          onClick={handleImproveProjectDescWithAi}
+                          disabled={isRewritingProj || !newProjDesc.trim()}
+                          style={{
+                            background: 'linear-gradient(135deg, rgba(0, 242, 254, 0.15), rgba(255, 0, 85, 0.15))',
+                            border: '1px solid var(--accent-cyan)',
+                            borderRadius: '6px',
+                            padding: '3px 10px',
+                            color: '#fff',
+                            fontFamily: 'var(--font-mono)',
+                            fontSize: '0.7rem',
+                            cursor: (isRewritingProj || !newProjDesc.trim()) ? 'default' : 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            opacity: !newProjDesc.trim() ? 0.5 : 1,
+                          }}
+                        >
+                          <Sparkles size={11} color="var(--accent-cyan)" />
+                          <span>{isRewritingProj ? 'Polishing...' : 'Improve with AI'}</span>
+                        </button>
+                      </div>
+
                       <textarea
                         rows={3}
                         placeholder="Project Description & Engineering Actions..."
@@ -1622,6 +2523,69 @@ const CreatorStudio: React.FC<CreatorStudioProps> = ({
                         onChange={(e) => setNewProjDesc(e.target.value)}
                         style={{ padding: '10px 14px', background: '#020408', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '6px', color: '#fff', fontSize: '0.85rem' }}
                       />
+
+                      {/* AI Project Description Suggestion */}
+                      {projAiSuggestion && (
+                        <div
+                          style={{
+                            padding: '10px 12px',
+                            background: 'rgba(0, 242, 254, 0.08)',
+                            border: '1px solid var(--accent-cyan)',
+                            borderRadius: '6px',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '6px',
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.7rem', color: 'var(--accent-cyan)', fontWeight: 700 }}>
+                              AI SUGGESTION ({projAiSuggestion.isAi ? 'LIVE AI' : 'OFFLINE ENGINE'})
+                            </span>
+                            <div style={{ display: 'flex', gap: '6px' }}>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setNewProjDesc(projAiSuggestion.text);
+                                  setProjAiSuggestion(null);
+                                }}
+                                style={{
+                                  background: 'var(--accent-cyan)',
+                                  border: 'none',
+                                  borderRadius: '4px',
+                                  padding: '2px 8px',
+                                  color: '#000',
+                                  fontFamily: 'var(--font-mono)',
+                                  fontSize: '0.7rem',
+                                  fontWeight: 700,
+                                  cursor: 'pointer',
+                                }}
+                              >
+                                Accept
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setProjAiSuggestion(null)}
+                                style={{
+                                  background: 'transparent',
+                                  border: '1px solid rgba(255, 255, 255, 0.2)',
+                                  borderRadius: '4px',
+                                  padding: '2px 8px',
+                                  color: 'rgba(255, 255, 255, 0.7)',
+                                  fontFamily: 'var(--font-mono)',
+                                  fontSize: '0.7rem',
+                                  cursor: 'pointer',
+                                }}
+                              >
+                                Dismiss
+                              </button>
+                            </div>
+                          </div>
+                          <p style={{ margin: 0, fontSize: '0.8rem', color: '#fff', lineHeight: 1.4 }}>
+                            {projAiSuggestion.text}
+                          </p>
+                        </div>
+                      )}
+
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                         <input
                           type="text"
@@ -1630,13 +2594,36 @@ const CreatorStudio: React.FC<CreatorStudioProps> = ({
                           onChange={(e) => setNewProjTags(e.target.value)}
                           style={{ padding: '8px 12px', background: '#020408', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '6px', color: '#fff' }}
                         />
-                        <input
-                          type="text"
-                          placeholder={activeDiscipline.metricsPlaceholder || 'Quantifiable Metric (e.g. FOS > 2.2)...'}
-                          value={newProjMetrics}
-                          onChange={(e) => setNewProjMetrics(e.target.value)}
-                          style={{ padding: '8px 12px', background: '#020408', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '6px', color: '#fff' }}
-                        />
+                        <div>
+                          <div style={{ display: 'flex', gap: '6px' }}>
+                            <input
+                              type="text"
+                              placeholder={activeDiscipline.metricsPlaceholder || 'Quantifiable Metric (e.g. FOS > 2.2)...'}
+                              value={newProjMetrics}
+                              onChange={(e) => setNewProjMetrics(e.target.value)}
+                              style={{ flex: 1, padding: '8px 12px', background: '#020408', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '6px', color: '#fff' }}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setNewProjMetrics(activeDiscipline.metricsPlaceholder?.split('(')[1]?.replace(')...', '') || '35% throughput increase');
+                              }}
+                              style={{
+                                background: 'rgba(255, 255, 255, 0.05)',
+                                border: '1px solid rgba(255, 255, 255, 0.15)',
+                                borderRadius: '6px',
+                                padding: '0 8px',
+                                color: 'var(--accent-cyan)',
+                                fontFamily: 'var(--font-mono)',
+                                fontSize: '0.68rem',
+                                cursor: 'pointer',
+                                whiteSpace: 'nowrap',
+                              }}
+                            >
+                              Suggest Metric
+                            </button>
+                          </div>
+                        </div>
                       </div>
                       <button
                         type="button"
@@ -1934,6 +2921,28 @@ const CreatorStudio: React.FC<CreatorStudioProps> = ({
                         onChange={(e) => setNewExpPoints(e.target.value)}
                         style={{ padding: '8px 12px', background: '#020408', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '6px', color: '#fff', fontSize: '0.85rem' }}
                       />
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', fontSize: '0.72rem', color: 'rgba(255, 255, 255, 0.55)' }}>
+                        <span>Tip: Frame contributions as action + impact + metric (no invented claims).</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setNewExpPoints('• Spearheaded core engineering initiatives resulting in 30% performance boost\n• Collaborated cross-functionally to deliver milestone ahead of deadline');
+                          }}
+                          style={{
+                            background: 'rgba(255, 255, 255, 0.05)',
+                            border: '1px solid rgba(255, 255, 255, 0.15)',
+                            borderRadius: '4px',
+                            padding: '2px 8px',
+                            color: 'var(--accent-cyan)',
+                            fontFamily: 'var(--font-mono)',
+                            fontSize: '0.68rem',
+                            cursor: 'pointer',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          Suggest Example
+                        </button>
+                      </div>
                       <button
                         type="button"
                         onClick={() => {

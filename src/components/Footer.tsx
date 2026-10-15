@@ -276,7 +276,7 @@ export const Footer: React.FC<FooterProps> = ({ portfolio }) => {
               color: 'var(--text-secondary)',
             }}
           >
-            © {CURRENT_YEAR} {(portfolio.name || 'PORTFOLIO').toUpperCase()}. ALL RIGHTS RESERVED. POWERED BY ANTIGRAVITY AI.
+            © {CURRENT_YEAR} {(portfolio.name || 'YOUR NAME').toUpperCase()}. BUILT WITH AI // ALL RIGHTS RESERVED.
           </div>
 
           <button

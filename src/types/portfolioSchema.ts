@@ -181,6 +181,7 @@ export interface EducationItem {
   period?: string;
   score?: string;
   details?: string;
+  field?: string;
 }
 export type Education = EducationItem;
 
@@ -191,6 +192,7 @@ export const EducationSchema: z.ZodType<EducationItem> = z.object({
   period: z.string().optional().default(''),
   score: z.string().optional().default(''),
   details: z.string().optional().default(''),
+  field: z.string().optional().default(''),
 });
 
 // ============================================================================
@@ -386,6 +388,9 @@ export const PortfolioDataSchema = z.object({
   ]),
   hero3DMode: Hero3DModeSchema.optional().default('kinetic_360'),
 
+  // Generation flag
+  isGenerated: z.boolean().optional().default(false),
+
   // Privacy & Search Engine Indexing Settings (Phase 7c)
   hidePhone: z.boolean().optional().default(false),
   hideEmail: z.boolean().optional().default(false),
@@ -577,6 +582,7 @@ export function normalizePortfolioData(raw: Partial<PortfolioData> | any): Portf
     sectionVisibility,
     sectionOrder,
     hero3DMode: raw.hero3DMode || 'kinetic_360',
+    isGenerated: Boolean(raw.isGenerated ?? false),
     hidePhone: hidePhoneVal,
     hideEmail: hideEmailVal,
     noIndex: noIndexVal,

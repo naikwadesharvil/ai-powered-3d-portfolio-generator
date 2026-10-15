@@ -20,11 +20,11 @@ import {
   Binary,
   Server,
   Activity,
+  Sparkles,
 } from 'lucide-react';
 import type { PortfolioData } from '../types/portfolio';
 import { getFlattenedSkills } from '../types/portfolioSchema';
 import { sanitizeUrl } from '../utils/sanitize';
-import { FrameScrubber } from './FrameScrubber';
 import { ThreeDImageStage } from './ThreeDImageStage';
 import { TiltCard3D } from './TiltCard3D';
 
@@ -205,18 +205,106 @@ ${portfolio.publications.map((pb) => `- ${pb.title} | ${pb.publisher} (${pb.date
                   background: '#04070d',
                 }}
               >
-                <FrameScrubber
-                  folderPath="/assets/image_1"
-                  totalFrames={36}
-                  fallbackImage={
-                    portfolio.avatarUrl && portfolio.avatarUrl !== '/assets/profile.png'
-                      ? portfolio.avatarUrl
-                      : '/assets/image_1/hero_front.webp'
-                  }
-                  mode="scroll"
-                  fit="cover"
-                  overlayTelemetry={false}
-                />
+                {portfolio.avatarUrl && !portfolio.avatarUrl.includes('image_1') && !portfolio.avatarUrl.includes('profile.png') ? (
+                  <img
+                    src={portfolio.avatarUrl}
+                    alt={portfolio.name}
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'cover',
+                    }}
+                  />
+                ) : (
+                  <div
+                    className="about-hologram-avatar"
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      position: 'relative',
+                      background: 'radial-gradient(circle at center, rgba(0, 242, 254, 0.12) 0%, rgba(4, 7, 13, 0.95) 70%)',
+                      overflow: 'hidden',
+                    }}
+                  >
+                    {/* Concentric Hologram Radar Rings */}
+                    <div
+                      style={{
+                        position: 'absolute',
+                        width: '220px',
+                        height: '220px',
+                        borderRadius: '50%',
+                        border: '1px dashed rgba(0, 242, 254, 0.35)',
+                        animation: 'spin 24s linear infinite',
+                      }}
+                    />
+                    <div
+                      style={{
+                        position: 'absolute',
+                        width: '170px',
+                        height: '170px',
+                        borderRadius: '50%',
+                        border: '1px solid rgba(255, 0, 85, 0.25)',
+                        animation: 'spin 16s linear infinite reverse',
+                      }}
+                    />
+                    <div
+                      style={{
+                        position: 'absolute',
+                        width: '120px',
+                        height: '120px',
+                        borderRadius: '50%',
+                        border: '2px solid var(--accent-cyan, #00f2fe)',
+                        boxShadow: '0 0 25px rgba(0, 242, 254, 0.4)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        background: 'rgba(9, 13, 22, 0.85)',
+                        backdropFilter: 'blur(8px)',
+                        zIndex: 2,
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontFamily: 'var(--font-heading, "Space Grotesk", sans-serif)',
+                          fontSize: '2.5rem',
+                          fontWeight: 800,
+                          color: '#ffffff',
+                          letterSpacing: '0.05em',
+                          textShadow: '0 0 16px var(--accent-cyan, #00f2fe)',
+                        }}
+                      >
+                        {(portfolio.name || 'Your Name')
+                          .split(' ')
+                          .map((w) => w[0])
+                          .join('')
+                          .slice(0, 2)
+                          .toUpperCase()}
+                      </span>
+                    </div>
+
+                    <div
+                      style={{
+                        marginTop: '150px',
+                        fontFamily: 'var(--font-mono, monospace)',
+                        fontSize: '0.66rem',
+                        color: 'var(--accent-cyan, #00f2fe)',
+                        letterSpacing: '0.12em',
+                        textTransform: 'uppercase',
+                        zIndex: 3,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                      }}
+                    >
+                      <Sparkles size={11} color="var(--accent-cyan, #00f2fe)" />
+                      <span>ABSTRACT HOLOGRAM MATRIX</span>
+                    </div>
+                  </div>
+                )}
                 <div
                   style={{
                     position: 'absolute',

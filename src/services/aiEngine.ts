@@ -235,7 +235,7 @@ export class AiEngine {
     const finalGithub = currentProfile?.github || '';
     const finalLinkedin = currentProfile?.linkedin || '';
     const finalTwitter = currentProfile?.twitter || '';
-    const finalAvatarUrl = currentProfile?.avatarUrl || '/assets/image_1/hero_front.jpg';
+    const finalAvatarUrl = (currentProfile?.avatarUrl && !currentProfile.avatarUrl.includes('image_1')) ? currentProfile.avatarUrl : '';
     const finalResumeUrl = currentProfile?.resumeUrl || '#';
 
     return normalizePortfolioData({
