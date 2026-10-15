@@ -89,7 +89,7 @@ export const AboutBento: React.FC<AboutBentoProps> = ({ portfolio, onOpenResume 
 
   const handleDownloadResume = () => {
     // Generate text/markdown resume export or trigger download
-    const resumeContent = `# ${portfolio.name}
+    const resumeContent = `# ${portfolio.name || 'Candidate'}
 ${portfolio.tagline}
 ${!portfolio.hideEmail && portfolio.email ? `Contact: ${portfolio.email} | ` : ''}Location: ${portfolio.location}
 LinkedIn: ${portfolio.linkedin || 'N/A'} | GitHub: ${portfolio.github || 'N/A'}
@@ -116,7 +116,7 @@ ${portfolio.publications.map((pb) => `- ${pb.title} | ${pb.publisher} (${pb.date
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `${portfolio.name.replace(/\s+/g, '_')}_Resume.md`;
+    link.download = `${(portfolio.name || 'Candidate').replace(/\s+/g, '_')}_Resume.md`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -262,7 +262,7 @@ ${portfolio.publications.map((pb) => `- ${pb.title} | ${pb.publisher} (${pb.date
                   marginBottom: '6px',
                 }}
               >
-                {portfolio.name}
+                {portfolio.name || 'Portfolio'}
               </h3>
               <p
                 style={{

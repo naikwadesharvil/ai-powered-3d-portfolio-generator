@@ -25,7 +25,7 @@ export const Navbar: React.FC<NavbarProps> = ({ portfolio, onOpenStudio, onOpenR
 
   const handleDownloadResume = () => {
     const flattenedSkills = getFlattenedSkills(portfolio.skills);
-    const resumeContent = `# ${portfolio.name}
+    const resumeContent = `# ${portfolio.name || 'Candidate'}
 ${portfolio.tagline}
 ${!portfolio.hideEmail && portfolio.email ? `Contact: ${portfolio.email} | ` : ''}Location: ${portfolio.location}
 LinkedIn: ${portfolio.linkedin || 'N/A'} | GitHub: ${portfolio.github || 'N/A'}
@@ -49,7 +49,7 @@ ${portfolio.certifications.map((c) => `- ${c.name} (${c.issuer})`).join('\n')}
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `${portfolio.name.replace(/\s+/g, '_')}_Resume.md`;
+    link.download = `${(portfolio.name || 'Candidate').replace(/\s+/g, '_')}_Resume.md`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -182,7 +182,7 @@ ${portfolio.certifications.map((c) => `- ${c.name} (${c.issuer})`).join('\n')}
               boxShadow: '0 0 15px var(--glow-color)',
             }}
           >
-            {portfolio.name.charAt(0)}
+            {(portfolio.name || 'P').charAt(0)}
           </div>
           <div>
             <div
@@ -197,7 +197,7 @@ ${portfolio.certifications.map((c) => `- ${c.name} (${c.issuer})`).join('\n')}
                 gap: '4px',
               }}
             >
-              {portfolio.name.split(' ')[0]}
+              {(portfolio.name || 'Portfolio').split(' ')[0]}
               <span style={{ color: 'var(--accent-cyan)' }}>.</span>
             </div>
             <div
@@ -429,7 +429,7 @@ ${portfolio.certifications.map((c) => `- ${c.name} (${c.issuer})`).join('\n')}
                   color: '#030712',
                 }}
               >
-                {portfolio.name.charAt(0)}
+                {(portfolio.name || 'P').charAt(0)}
               </div>
               <span
                 style={{
@@ -440,7 +440,7 @@ ${portfolio.certifications.map((c) => `- ${c.name} (${c.issuer})`).join('\n')}
                   letterSpacing: '0.05em',
                 }}
               >
-                {portfolio.name.toUpperCase()}
+                {(portfolio.name || 'PORTFOLIO').toUpperCase()}
               </span>
             </div>
 

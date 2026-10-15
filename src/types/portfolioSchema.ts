@@ -48,7 +48,7 @@ export type Hero3DMode = z.infer<typeof Hero3DModeSchema>;
 // ============================================================================
 
 export const ProfileSchema = z.object({
-  name: z.string().min(1, 'Name is required').default(''),
+  name: z.string().default(''),
   targetRole: z.string().default('Engineer & Developer'),
   tagline: z.string().default('Building high-performance systems.'),
   avatarUrl: z.string().default('/assets/profile.png'),
@@ -405,7 +405,9 @@ export type PortfolioData = z.infer<typeof PortfolioDataSchema>;
 
 export function normalizePortfolioData(raw: Partial<PortfolioData> | any): PortfolioData {
   const personaVal = (raw.role || raw.persona || 'student') as Persona;
-  const nameVal = (raw.name && raw.name.trim().length > 0) ? raw.name.trim() : (raw.profile?.name || 'Engineer');
+  const nameVal = (raw.name && raw.name.trim().length > 0)
+    ? raw.name.trim()
+    : (raw.profile?.name && raw.profile.name.trim().length > 0 ? raw.profile.name.trim() : '');
   const targetRoleVal = raw.targetRole || raw.profile?.targetRole || raw.tagline || 'AI/ML Systems Engineer';
   const taglineVal = raw.tagline || raw.profile?.tagline || targetRoleVal;
   const avatarUrlVal = raw.avatarUrl || raw.profile?.avatarUrl || '/assets/profile.png';

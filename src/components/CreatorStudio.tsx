@@ -437,7 +437,7 @@ const CreatorStudio: React.FC<CreatorStudioProps> = ({
       setIsGenerating(true);
       setGenerationError(null);
       const fallbackPortfolio = AiEngine.generatePortfolioFromAutopilot({
-        name: autopilotName || 'Alex Chen',
+        name: autopilotName.trim(),
         branch: selectedBranch as EducationBranch,
         customBranchName: selectedBranch === 'other' ? customBranchName : undefined,
         interests: autopilotInterests || activeDiscipline.defaultInterests.join(', '),
@@ -515,7 +515,7 @@ const CreatorStudio: React.FC<CreatorStudioProps> = ({
 
     try {
       const result = await AiApiClient.generatePortfolio({
-        name: autopilotName || 'Alex Chen',
+        name: autopilotName.trim(),
         branch: selectedBranch as EducationBranch,
         customBranchName: selectedBranch === 'other' ? customBranchName : undefined,
         interests: autopilotInterests || activeDiscipline.defaultInterests.join(', '),
@@ -2218,7 +2218,7 @@ const CreatorStudio: React.FC<CreatorStudioProps> = ({
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px', fontSize: '0.85rem' }}>
                     <div>
                       <span style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', fontSize: '0.72rem' }}>NAME: </span>
-                      <strong style={{ color: '#fff' }}>{autopilotName || 'Alex Chen'}</strong>
+                      <strong style={{ color: '#fff' }}>{autopilotName.trim() || '(No name provided)'}</strong>
                     </div>
                     <div>
                       <span style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', fontSize: '0.72rem' }}>DISCIPLINE: </span>

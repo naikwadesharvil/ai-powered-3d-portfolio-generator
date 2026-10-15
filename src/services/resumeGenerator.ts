@@ -557,7 +557,7 @@ export function generateResumeHtml(
 export function generateResumePlainText(portfolio: PortfolioData): string {
   const lines: string[] = [];
 
-  lines.push(portfolio.name.toUpperCase());
+  lines.push((portfolio.name || 'Candidate').toUpperCase());
   lines.push(portfolio.targetRole || portfolio.tagline || portfolio.role.toUpperCase());
   lines.push('------------------------------------------------------------');
 
@@ -656,7 +656,7 @@ export function generateResumePlainText(portfolio: PortfolioData): string {
 export function generateResumeMarkdown(portfolio: PortfolioData): string {
   const lines: string[] = [];
 
-  lines.push(`# ${portfolio.name}`);
+  lines.push(`# ${portfolio.name || 'Candidate'}`);
   lines.push(`**${portfolio.targetRole || portfolio.tagline || portfolio.role}**\n`);
 
   const contacts: string[] = [];

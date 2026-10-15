@@ -92,7 +92,7 @@ aiRouter.post('/generate-portfolio', async (req: Request, res: Response) => {
           persona: targetPersona,
           discipline: targetDiscipline,
           disciplineName: customBranchName || currentProfile?.branchName || '',
-          name: name.trim() || currentProfile?.name || 'Alex Chen',
+          name: name.trim() || currentProfile?.name?.trim() || '',
           branch: targetDiscipline,
           branchName: customBranchName || currentProfile?.branchName || '',
           tagline: generated.tagline,

@@ -129,6 +129,7 @@ async function main() {
       { name: 'test_7c_privacy_and_cost.mjs', cmd: 'npx tsx test_7c_privacy_and_cost.mjs' },
       { name: 'test_7c_browser_studio_privacy.mjs', cmd: 'node test_7c_browser_studio_privacy.mjs' },
       { name: 'test_studio_regression.mjs', cmd: 'node test_studio_regression.mjs' },
+      { name: 'test_hologram_generation.mjs', cmd: 'node test_hologram_generation.mjs' },
     ];
 
     for (const t of tests) {

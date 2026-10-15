@@ -14,6 +14,7 @@ import { SelectedWorks } from './SelectedWorks';
 import { ExperienceServices } from './ExperienceServices';
 import { CertificationsPublications } from './CertificationsPublications';
 import { ContactSection } from './ContactSection';
+import { HologramCard } from './HologramCard';
 
 export const LivePortfolioPreview: React.FC = () => {
   const { portfolio, themeTokens } = usePortfolioStore();
@@ -234,6 +235,11 @@ export const LivePortfolioPreview: React.FC = () => {
                     {portfolio.email}
                   </span>
                 )}
+              </div>
+
+              {/* 3D Hologram Card in Live Customize Preview */}
+              <div style={{ marginTop: '24px', display: 'flex', justifyContent: 'center' }}>
+                <HologramCard portfolio={portfolio} />
               </div>
             </div>
           )}

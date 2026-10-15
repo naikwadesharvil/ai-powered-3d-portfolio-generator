@@ -63,7 +63,7 @@ export class AiEngine {
 
     const finalName = (name && name.trim().length > 0)
       ? name.trim()
-      : (currentProfile?.name || 'Alex Chen');
+      : (currentProfile?.name?.trim() || '');
     const discipline = getDisciplinePreset(branch, customBranchName);
 
     // Resolve interests: use provided or discipline defaults
@@ -93,7 +93,9 @@ export class AiEngine {
       targetRole = (branch && branch !== 'cs_it') || customBranchName ? `${discipline.shortName} Graduate Engineer` : `${primaryInterest} Graduate Engineer`;
       tagline = (branch && branch !== 'cs_it') || customBranchName ? discipline.roleHeadlines.student : `${primaryInterest} Specialist & Aspiring Engineer`;
       shortBio = discipline.roleShortBios.student;
-      fullBio = `${finalName} is an engineering student specializing in ${discipline.label}. Experienced in ${primaryInterest}, hands-on modeling, analysis, and data systems. Dedicated to building reliable projects and collaborating on high-impact initiatives.`;
+      fullBio = finalName
+        ? `${finalName} is an engineering student specializing in ${discipline.label}. Experienced in ${primaryInterest}, hands-on modeling, analysis, and data systems. Dedicated to building reliable projects and collaborating on high-impact initiatives.`
+        : `Engineering student specializing in ${discipline.label}. Experienced in ${primaryInterest}, hands-on modeling, analysis, and data systems. Dedicated to building reliable projects and collaborating on high-impact initiatives.`;
     } else if (role === 'job_seeker') {
       theme = 'obsidian_stealth';
       hero3DMode = 'kinetic_360';
@@ -238,7 +240,9 @@ export class AiEngine {
 
     return normalizePortfolioData({
       ...(currentProfile || {}),
-      id: `portfolio_${finalName.toLowerCase().replace(/[^a-z0-9]/g, '_')}`,
+      id: finalName
+        ? `portfolio_${finalName.toLowerCase().replace(/[^a-z0-9]/g, '_')}`
+        : (currentProfile?.id || `portfolio_${Date.now()}`),
       version: (currentProfile?.version || 1) + 1,
       lastUpdated: new Date().toISOString().split('T')[0],
       name: finalName,
@@ -275,7 +279,9 @@ export class AiEngine {
       sectionVisibility,
       sectionOrder,
       telemetry: {
-        session: `SESSION: ${finalName.toUpperCase().split(' ')[0]}_ONLINE`,
+        session: finalName
+          ? `SESSION: ${finalName.toUpperCase().split(' ')[0]}_ONLINE`
+          : (currentProfile?.telemetry?.session || 'SESSION: CANDIDATE_ONLINE'),
         timezone: currentProfile?.telemetry?.timezone || 'UTC+05:30 [ONLINE]',
         status: `STATUS: ACTIVE // ${discipline.shortName.toUpperCase()} // 2026`,
         coords: currentProfile?.telemetry?.coords || '16.8524° N, 74.2814° E',

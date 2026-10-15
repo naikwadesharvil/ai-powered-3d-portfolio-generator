@@ -55,7 +55,7 @@ export const Footer: React.FC<FooterProps> = ({ portfolio }) => {
                 gap: '4px',
               }}
             >
-              {portfolio.name.split(' ')[0]}
+              {(portfolio.name || 'Portfolio').split(' ')[0]}
               <span style={{ color: 'var(--accent-cyan)' }}>.</span>
             </div>
             <p
@@ -276,7 +276,7 @@ export const Footer: React.FC<FooterProps> = ({ portfolio }) => {
               color: 'var(--text-secondary)',
             }}
           >
-            © {CURRENT_YEAR} {portfolio.name.toUpperCase()}. ALL RIGHTS RESERVED. POWERED BY ANTIGRAVITY AI.
+            © {CURRENT_YEAR} {(portfolio.name || 'PORTFOLIO').toUpperCase()}. ALL RIGHTS RESERVED. POWERED BY ANTIGRAVITY AI.
           </div>
 
           <button

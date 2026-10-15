@@ -374,6 +374,84 @@ async function runAsyncCheck(name, fn) {
     assert(p.sectionOrder.includes('services'));
   });
 
+  // --------------------------------------------------------------------------
+  // 9. Name & Identity Fact Integrity (Zero Fabricated Names)
+  // --------------------------------------------------------------------------
+  console.log('\n--- 9. Name & Identity Fact Integrity ---');
+  runCheck('Empty input does not produce a fabricated identity', () => {
+    const p = AiEngine.generatePortfolioFromAutopilot({});
+    assert.strictEqual(p.name, '', 'Name must remain empty string, never Alex Chen');
+    assert.strictEqual(p.profile.name, '', 'Profile name must remain empty string');
+    assert(!p.fullBio.includes('Alex Chen'), 'Bio must not contain Alex Chen');
+    assert(!p.fullBio.includes('Engineer is an'), 'Bio must not contain synthetic fallback name');
+    assert(!p.id.includes('alex_chen'), 'ID must not contain alex_chen');
+    assert(!p.telemetry.session.includes('ALEX'), 'Telemetry session must not contain ALEX');
+  });
+
+  runCheck('Missing names remain missing through portfolio generation', () => {
+    const p1 = AiEngine.generatePortfolioFromAutopilot({ name: '', role: 'student', branch: 'cs_it' });
+    assert.strictEqual(p1.name, '', 'Empty string name remains empty');
+    assert.strictEqual(p1.profile.name, '', 'Profile name remains empty');
+
+    const p2 = AiEngine.generatePortfolioFromAutopilot({ name: '   \t  \n  ', role: 'job_seeker' });
+    assert.strictEqual(p2.name, '', 'Whitespace-only name remains empty');
+    assert.strictEqual(p2.profile.name, '', 'Profile name for whitespace remains empty');
+  });
+
+  runCheck('Valid user-provided names remain unchanged', () => {
+    const p = AiEngine.generatePortfolioFromAutopilot({ name: 'Devon Lee', role: 'student', branch: 'cs_it' });
+    assert.strictEqual(p.name, 'Devon Lee', 'Genuine user name preserved in root');
+    assert.strictEqual(p.profile.name, 'Devon Lee', 'Genuine user name preserved in profile');
+    assert(p.fullBio.includes('Devon Lee'), 'Full bio references user name');
+    assert(p.telemetry.session.includes('DEVON'), 'Telemetry session includes user name initial');
+  });
+
+  runCheck('Partial profiles still generate safely without crashing or hallucinations', () => {
+    const p = AiEngine.generatePortfolioFromAutopilot({ branch: 'mechanical', interests: 'Thermodynamics, FEA' });
+    assert.strictEqual(p.name, '', 'Name remains uninvented');
+    assert.strictEqual(p.branch, 'mechanical', 'Discipline branch set correctly');
+    assert(p.skills.length > 0, 'Discipline skills populated');
+    assert.strictEqual(p.education.length, 0, 'No fake education invented');
+    assert.strictEqual(p.experience.length, 0, 'No fake experience invented');
+  });
+
+  runCheck('Existing persona behavior does not regress when name is missing', () => {
+    const personas = ['student', 'job_seeker', 'professional', 'freelancer'];
+    for (const role of personas) {
+      const p = AiEngine.generatePortfolioFromAutopilot({ role, branch: 'cs_it' });
+      assert.strictEqual(p.role, role, `Role ${role} preserved`);
+      assert.strictEqual(p.name, '', `Name empty for ${role}`);
+      assert(typeof p.fullBio === 'string' && p.fullBio.length > 20, `Bio generated cleanly for ${role}`);
+      assert(!p.fullBio.includes('Alex Chen'), `No Alex Chen in bio for ${role}`);
+    }
+  });
+
+  runCheck('AI provider failure and offline fallback does not introduce fictional names', () => {
+    const p = AiEngine.generatePortfolioFromAutopilot({
+      name: '',
+      role: 'student',
+      branch: 'cs_it',
+      projects: [],
+      education: [],
+      experiences: [],
+    });
+    assert.strictEqual(p.name, '', 'Offline fallback preserves empty name');
+    assert(!p.fullBio.includes('Alex Chen'), 'Offline bio contains no fictional identity');
+
+    // Verify resume export uses clearly labeled Candidate placeholder, never Alex Chen
+    const htmlResume = generateResumeHtml(p);
+    assert(!htmlResume.includes('Alex Chen'), 'HTML resume contains no fictional identity');
+    assert(htmlResume.includes('Candidate'), 'HTML resume uses generic Candidate placeholder');
+
+    const plaintextResume = generateResumePlainText(p);
+    assert(!plaintextResume.includes('Alex Chen'), 'Plaintext resume contains no fictional identity');
+    assert(plaintextResume.includes('CANDIDATE'), 'Plaintext resume uses generic CANDIDATE placeholder');
+
+    const mdResume = generateResumeMarkdown(p);
+    assert(!mdResume.includes('Alex Chen'), 'Markdown resume contains no fictional identity');
+    assert(mdResume.includes('Candidate'), 'Markdown resume uses generic Candidate placeholder');
+  });
+
   console.log('\n======================================================================');
   console.log(`🎯 TOTAL CHECKS: ${totalTests} | PASSED: ${passedTests} | FAILED: ${totalTests - passedTests}`);
   console.log('======================================================================\n');

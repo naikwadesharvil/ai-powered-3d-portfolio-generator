@@ -279,6 +279,7 @@ export function App() {
       {/* Top Ambient Bar for Quick Role Switching (Only in studio / authoring mode) */}
       {!isSlugRoute && (
         <div
+          className="bottom-studio-dock"
           style={{
             position: 'fixed',
             bottom: '24px',
@@ -287,10 +288,10 @@ export function App() {
             display: 'flex',
             alignItems: 'center',
             gap: '8px',
-            background: 'rgba(5, 7, 12, 0.85)',
+            background: 'rgba(5, 7, 12, 0.9)',
             backdropFilter: 'blur(16px)',
             WebkitBackdropFilter: 'blur(16px)',
-            border: '1px solid rgba(0, 242, 254, 0.3)',
+            border: '1px solid rgba(0, 242, 254, 0.35)',
             borderRadius: '9999px',
             padding: '6px 14px',
             boxShadow: '0 10px 30px rgba(0,0,0,0.6), 0 0 20px var(--glow-color)',
@@ -375,7 +376,20 @@ export function App() {
             ];
             return order.map((sectionKey) => {
               if (sectionKey === 'hero' && activePortfolio.sectionVisibility.hero) {
-                return <Hero3D portfolio={activePortfolio} key="hero" />;
+                return (
+                  <Hero3D
+                    portfolio={activePortfolio}
+                    key="hero"
+                    onOpenStudio={() => {
+                      if (isSlugRoute) {
+                        window.location.href = '/';
+                      } else {
+                        setIsStudioOpen(true);
+                      }
+                    }}
+                    isPublicPage={isSlugRoute}
+                  />
+                );
               }
               if (sectionKey === 'welcome' && activePortfolio.sectionVisibility.welcome) {
                 return <WelcomeTransition portfolio={activePortfolio} key="welcome" />;
@@ -440,6 +454,23 @@ export function App() {
           portfolio={activePortfolio}
         />
       )}
+
+      <style>{`
+        @media (max-width: 640px) {
+          .bottom-studio-dock {
+            left: 50% !important;
+            transform: translateX(-50%) !important;
+            bottom: 16px !important;
+            padding: 6px 12px !important;
+            max-width: calc(100vw - 24px) !important;
+            justify-content: center !important;
+          }
+          .bottom-studio-dock button#launch-studio-btn {
+            padding: 8px 18px !important;
+            font-size: 0.8rem !important;
+          }
+        }
+      `}</style>
     </div>
   );
 }
