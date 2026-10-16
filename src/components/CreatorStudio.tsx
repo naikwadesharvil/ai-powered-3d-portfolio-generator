@@ -64,6 +64,8 @@ import {
 } from '../services/resumeGenerator';
 
 import SplitCustomizer from './SplitCustomizer';
+import { motion, AnimatePresence } from 'motion/react';
+import { triggerSuccessToast } from './SuccessToast';
 
 export type StepperStep = 'details' | 'generate' | 'customize' | 'download_publish';
 
@@ -491,6 +493,7 @@ const CreatorStudio: React.FC<CreatorStudioProps> = ({
         if (res.ownerToken) {
           setNewlyIssuedToken(res.ownerToken);
         }
+        triggerSuccessToast('Portfolio Published Live!');
         try {
           confetti({
             particleCount: 70,
@@ -826,7 +829,8 @@ const CreatorStudio: React.FC<CreatorStudioProps> = ({
         suggestions: result.improvementSuggestions,
       });
 
-      // Confetti celebration
+      // Confetti celebration & success toast
+      triggerSuccessToast('3D Portfolio Synthesized Successfully!');
       confetti({
         particleCount: 90,
         spread: 75,
@@ -1585,6 +1589,15 @@ const CreatorStudio: React.FC<CreatorStudioProps> = ({
 
         {/* Tab Body */}
         <div style={{ flex: 1, overflowY: 'auto', padding: currentStep === 'customize' ? '16px 20px' : '32px' }}>
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={currentStep}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.25, ease: 'easeOut' }}
+              style={{ width: '100%' }}
+            >
           {/* ========================================================================= */}
           {/* STEP 1: DETAILS */}
           {/* ========================================================================= */}
@@ -3190,10 +3203,16 @@ const CreatorStudio: React.FC<CreatorStudioProps> = ({
                     </div>
                   )}
 
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                    <CheckCircle2 size={18} color={generationMeta.source === 'ai' ? '#00f2fe' : '#ffaa00'} />
-                    <span style={{ fontWeight: 700, color: '#fff', fontSize: '0.95rem' }}>
-                      {generationMeta.message}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '8px', flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <CheckCircle2 size={18} color={generationMeta.source === 'ai' ? '#00f2fe' : '#ffaa00'} />
+                      <span style={{ fontWeight: 700, color: '#fff', fontSize: '0.95rem' }}>
+                        {generationMeta.message}
+                      </span>
+                    </div>
+                    <span className="success-badge">
+                      <Check size={12} />
+                      <span>SYNTHESIS COMPLETE</span>
                     </span>
                   </div>
 
@@ -3574,6 +3593,7 @@ const CreatorStudio: React.FC<CreatorStudioProps> = ({
                             template: step4ResumeTemplate,
                             accentColor: activeThemeTokens?.accentPrimary || '#00f2fe',
                           });
+                          triggerSuccessToast('Resume PDF Exported Successfully!');
                         } finally {
                           setStep4ExportingPdf(false);
                         }
@@ -3597,6 +3617,7 @@ const CreatorStudio: React.FC<CreatorStudioProps> = ({
                             template: step4ResumeTemplate,
                             accentColor: activeThemeTokens?.accentPrimary || '#00f2fe',
                           });
+                          triggerSuccessToast('Resume DOCX Exported Successfully!');
                         } finally {
                           setStep4ExportingDocx(false);
                         }
@@ -4195,6 +4216,8 @@ const CreatorStudio: React.FC<CreatorStudioProps> = ({
               </div>
             </div>
           )}
+            </motion.div>
+          </AnimatePresence>
         </div>
       </div>
     </div>

@@ -13,6 +13,7 @@ import { CertificationsPublications } from './components/CertificationsPublicati
 import { ContactSection } from './components/ContactSection';
 import { Footer } from './components/Footer';
 import { NotFoundPage } from './components/NotFoundPage';
+import { SuccessToast } from './components/SuccessToast';
 import { usePortfolioStore } from './store/portfolioStore';
 import { CURATED_THEME_PRESETS, themeTokensToCssVars } from './types/themeTokens';
 import { getPublishedPortfolio } from './services/portfolioApi';
@@ -555,6 +556,9 @@ export function App() {
           portfolio={activePortfolio}
         />
       )}
+
+      {/* Global Success Feedback Toast (Checkmark + Fade) */}
+      <SuccessToast />
 
       <style>{`
         @media (max-width: 640px) {

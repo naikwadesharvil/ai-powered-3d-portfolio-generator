@@ -2,6 +2,7 @@ import React from 'react';
 import { CheckCircle2, MessageSquare, Terminal, Building2, Calendar } from 'lucide-react';
 import type { PortfolioData } from '../types/portfolio';
 import { sanitizeUrl } from '../utils/sanitize';
+import { useReveal } from '../hooks/useReveal';
 
 interface ExperienceServicesProps {
   portfolio: PortfolioData;
@@ -9,10 +10,12 @@ interface ExperienceServicesProps {
 
 export const ExperienceServices: React.FC<ExperienceServicesProps> = ({ portfolio }) => {
   const isFreelancer = portfolio.role === 'freelancer';
+  const sectionRef = useReveal<HTMLElement>();
 
   return (
     <section
       id={isFreelancer ? 'services' : 'experience'}
+      ref={sectionRef}
       style={{
         position: 'relative',
         width: '100%',
@@ -33,7 +36,7 @@ export const ExperienceServices: React.FC<ExperienceServicesProps> = ({ portfoli
         }}
       >
         {/* Section Header */}
-        <div style={{ marginBottom: '56px', textAlign: 'left' }}>
+        <div className="reveal reveal-up" style={{ marginBottom: '56px', textAlign: 'left' }}>
           <div className="badge-neon" style={{ marginBottom: '14px' }}>
             <Terminal size={14} />
             <span>
@@ -73,10 +76,10 @@ export const ExperienceServices: React.FC<ExperienceServicesProps> = ({ portfoli
               marginBottom: '64px',
             }}
           >
-            {portfolio.services.map((service) => (
+            {portfolio.services.map((service, sIdx) => (
               <div
                 key={service.id}
-                className="glass-panel"
+                className={`glass-panel reveal reveal-up stagger-${(sIdx % 6) + 1}`}
                 style={{
                   padding: '36px',
                   display: 'flex',
@@ -189,7 +192,7 @@ export const ExperienceServices: React.FC<ExperienceServicesProps> = ({ portfoli
                 marginBottom: '64px',
               }}
             >
-              {experienceList.map((exp) => {
+              {experienceList.map((exp, eIdx) => {
                 const bulletsList = (exp.bullets && exp.bullets.length > 0)
                   ? exp.bullets
                   : (exp.points || []);
@@ -197,7 +200,7 @@ export const ExperienceServices: React.FC<ExperienceServicesProps> = ({ portfoli
                 return (
                   <div
                     key={exp.id}
-                    className="glass-panel"
+                    className={`glass-panel reveal reveal-up stagger-${(eIdx % 6) + 1}`}
                     style={{
                       padding: '32px',
                       borderLeft: '4px solid var(--accent-cyan)',

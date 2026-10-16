@@ -27,6 +27,8 @@ import { getFlattenedSkills } from '../types/portfolioSchema';
 import { sanitizeUrl } from '../utils/sanitize';
 import { ThreeDImageStage } from './ThreeDImageStage';
 import { TiltCard3D } from './TiltCard3D';
+import { useReveal } from '../hooks/useReveal';
+import { triggerSuccessToast } from './SuccessToast';
 
 // Contextual engineering and technology skill icon matcher
 const getSkillIcon = (name: string, category?: string) => {
@@ -85,6 +87,7 @@ interface AboutBentoProps {
 }
 
 export const AboutBento: React.FC<AboutBentoProps> = ({ portfolio, onOpenResume }) => {
+  const sectionRef = useReveal<HTMLElement>();
   const flattenedSkills = getFlattenedSkills(portfolio.skills);
 
   const handleDownloadResume = () => {
@@ -121,11 +124,13 @@ ${portfolio.publications.map((pb) => `- ${pb.title} | ${pb.publisher} (${pb.date
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
+    triggerSuccessToast('Resume Exported Successfully!');
   };
 
   return (
     <section
       id="about"
+      ref={sectionRef}
       style={{
         position: 'relative',
         width: '100%',
@@ -143,7 +148,7 @@ ${portfolio.publications.map((pb) => `- ${pb.title} | ${pb.publisher} (${pb.date
         }}
       >
         {/* Section Header */}
-        <div style={{ marginBottom: '56px', textAlign: 'left' }}>
+        <div className="reveal reveal-up" style={{ marginBottom: '56px', textAlign: 'left' }}>
           <div className="badge-neon" style={{ marginBottom: '14px' }}>
             <Terminal size={14} />
             <span>BIOGRAPHY // PROFILE BLUEPRINT</span>
@@ -174,7 +179,7 @@ ${portfolio.publications.map((pb) => `- ${pb.title} | ${pb.publisher} (${pb.date
         >
           {/* Left Column: Portrait Card (Desktop Span 5, Mobile Span 12) */}
           <div
-            className="glass-panel about-portrait-col"
+            className="glass-panel about-portrait-col reveal reveal-up stagger-1"
             style={{
               padding: '24px',
               display: 'flex',
@@ -413,6 +418,7 @@ ${portfolio.publications.map((pb) => `- ${pb.title} | ${pb.publisher} (${pb.date
             id="about-stats-container"
           >
             {/* Stat Card 1: Core Stack */}
+            <div className="reveal reveal-up stagger-2">
             <TiltCard3D maxTilt={6} borderRadius="12px" glowColor="var(--accent-cyan)">
               <div
                 className="glass-panel"
@@ -472,8 +478,10 @@ ${portfolio.publications.map((pb) => `- ${pb.title} | ${pb.publisher} (${pb.date
                 </p>
               </div>
             </TiltCard3D>
+            </div>
 
             {/* Stat Card 2: Education */}
+            <div className="reveal reveal-up stagger-3">
             <TiltCard3D maxTilt={6} borderRadius="12px" glowColor="var(--accent-magenta)">
               <div
                 className="glass-panel"
@@ -533,8 +541,10 @@ ${portfolio.publications.map((pb) => `- ${pb.title} | ${pb.publisher} (${pb.date
                 </p>
               </div>
             </TiltCard3D>
+            </div>
 
             {/* Stat Card 3: Projects / Publications */}
+            <div className="reveal reveal-up stagger-4">
             <TiltCard3D maxTilt={6} borderRadius="12px" glowColor="var(--accent-cyan)">
               <div
                 className="glass-panel"
@@ -594,11 +604,12 @@ ${portfolio.publications.map((pb) => `- ${pb.title} | ${pb.publisher} (${pb.date
                 </p>
               </div>
             </TiltCard3D>
+            </div>
           </div>
 
           {/* Full Width Bottom Row: GRAB YOUR TOOLS & DOWNLOAD RESUME CTA */}
           <div
-            className="glass-panel"
+            className="glass-panel reveal reveal-up stagger-5"
             style={{
               gridColumn: 'span 12',
               padding: '36px',
@@ -629,9 +640,10 @@ ${portfolio.publications.map((pb) => `- ${pb.title} | ${pb.publisher} (${pb.date
                 <span>GRAB YOUR TOOLS // CORE TECH STACK</span>
               </div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
-                {flattenedSkills.map((skill) => (
+                {flattenedSkills.map((skill, sIdx) => (
                   <div
                     key={skill.name}
+                    className={`skill-chip reveal reveal-fade stagger-${(sIdx % 6) + 1}`}
                     style={{
                       background: 'rgba(255, 255, 255, 0.04)',
                       border: '1px solid rgba(255, 255, 255, 0.1)',

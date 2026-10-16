@@ -3,6 +3,7 @@ import { ArrowUp, ArrowRight } from 'lucide-react';
 import { GithubIcon, LinkedinIcon, TwitterIcon } from './Icons';
 import type { PortfolioData } from '../types/portfolio';
 import { sanitizeUrl } from '../utils/sanitize';
+import { useReveal } from '../hooks/useReveal';
 
 interface FooterProps {
   portfolio: PortfolioData;
@@ -11,12 +12,15 @@ interface FooterProps {
 const CURRENT_YEAR = new Date().getFullYear();
 
 export const Footer: React.FC<FooterProps> = ({ portfolio }) => {
+  const footerRef = useReveal<HTMLElement>();
+
   const scrollToTop = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   return (
     <footer
+      ref={footerRef}
       style={{
         width: '100%',
         padding: '80px 24px 40px',
@@ -27,6 +31,7 @@ export const Footer: React.FC<FooterProps> = ({ portfolio }) => {
       }}
     >
       <div
+        className="reveal reveal-up"
         style={{
           maxWidth: '1280px',
           margin: '0 auto',

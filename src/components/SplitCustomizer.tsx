@@ -37,6 +37,7 @@ import { ThemeCustomizer } from './ThemeCustomizer';
 import { LivePortfolioPreview } from './LivePortfolioPreview';
 import { AiApiClient } from '../services/aiApiClient';
 import type { PortfolioData } from '../types/portfolio';
+import { motion, AnimatePresence } from 'motion/react';
 
 const SECTION_LABELS: Record<string, string> = {
   hero: 'Hero & 3D Telemetry',
@@ -532,6 +533,7 @@ export const SplitCustomizer: React.FC<SplitCustomizerProps> = ({
                   <button
                     key={preset.id}
                     type="button"
+                    className="theme-chip"
                     onClick={() => applyThemePreset(preset.id)}
                     style={{
                       display: 'flex',
@@ -652,8 +654,16 @@ export const SplitCustomizer: React.FC<SplitCustomizerProps> = ({
             )}
           </div>
 
-          {activeEditorTab === 'sections' ? (
-            <div>
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={activeEditorTab}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.25, ease: 'easeOut' }}
+            >
+              {activeEditorTab === 'sections' ? (
+                <div>
               <div style={{ marginBottom: '14px' }}>
                 <h4 style={{ margin: 0, fontSize: '1rem', color: '#fff', fontFamily: 'var(--font-display)' }}>
                   Section Flow & Inline Editor
@@ -930,10 +940,12 @@ export const SplitCustomizer: React.FC<SplitCustomizerProps> = ({
                   </div>
                 </SortableContext>
               </DndContext>
-            </div>
-          ) : (
-            <ThemeCustomizer />
-          )}
+                </div>
+              ) : (
+                <ThemeCustomizer />
+              )}
+            </motion.div>
+          </AnimatePresence>
         </div>
 
         {/* Right Panel: Live Reactive Preview */}

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Volume2, VolumeX, Sparkles, Download, Menu, X } from 'lucide-react';
 import type { PortfolioData } from '../types/portfolio';
 import { getFlattenedSkills } from '../types/portfolioSchema';
+import { triggerSuccessToast } from './SuccessToast';
 
 interface NavbarProps {
   portfolio: PortfolioData;
@@ -54,6 +55,7 @@ ${portfolio.certifications.map((c) => `- ${c.name} (${c.issuer})`).join('\n')}
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
+    triggerSuccessToast('Resume Exported Successfully!');
   };
 
   const [activeSection, setActiveSection] = useState<string>('hero');
@@ -233,7 +235,7 @@ ${portfolio.certifications.map((c) => `- ${c.name} (${c.issuer})`).join('\n')}
                   transition: 'all 0.2s ease',
                   position: 'relative',
                   padding: '4px 0',
-                  borderBottom: isActive ? '2px solid var(--accent-cyan)' : '2px solid transparent',
+                  borderBottom: '2px solid transparent',
                 }}
                 onMouseEnter={(e) => {
                   if (!isActive) e.currentTarget.style.color = 'var(--accent-cyan)';

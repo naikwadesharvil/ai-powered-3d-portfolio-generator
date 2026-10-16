@@ -6,15 +6,19 @@ import { ThreeDImageStage } from './ThreeDImageStage';
 import { TiltCard3D } from './TiltCard3D';
 import { ProjectBlueprintPreview } from './ProjectBlueprintPreview';
 import { sanitizeUrl } from '../utils/sanitize';
+import { useReveal } from '../hooks/useReveal';
 
 interface SelectedWorksProps {
   portfolio: PortfolioData;
 }
 
 export const SelectedWorks: React.FC<SelectedWorksProps> = ({ portfolio }) => {
+  const sectionRef = useReveal<HTMLElement>();
+
   return (
     <section
       id="projects"
+      ref={sectionRef}
       style={{
         position: 'relative',
         width: '100%',
@@ -32,7 +36,7 @@ export const SelectedWorks: React.FC<SelectedWorksProps> = ({ portfolio }) => {
         }}
       >
         {/* Section Header */}
-        <div style={{ marginBottom: '56px', textAlign: 'left' }}>
+        <div className="reveal reveal-up" style={{ marginBottom: '56px', textAlign: 'left' }}>
           <div className="badge-magenta" style={{ marginBottom: '14px' }}>
             <Terminal size={14} />
             <span>PORTFOLIO SHOWCASE // ARCHIVES</span>
@@ -54,7 +58,7 @@ export const SelectedWorks: React.FC<SelectedWorksProps> = ({ portfolio }) => {
 
         {/* Featured Flagship Project Architecture Stage */}
         {portfolio.projects.length > 0 && (
-          <div style={{ marginBottom: '48px', width: '100%' }}>
+          <div className="reveal reveal-up stagger-1" style={{ marginBottom: '48px', width: '100%' }}>
             <ThreeDImageStage
               perspective={1200}
               maxTilt={8}
@@ -208,9 +212,9 @@ export const SelectedWorks: React.FC<SelectedWorksProps> = ({ portfolio }) => {
             gap: '24px',
           }}
         >
-          {portfolio.projects.map((project) => (
+          {portfolio.projects.map((project, pIdx) => (
+            <div key={project.id} className={`reveal reveal-up stagger-${(pIdx % 6) + 1}`}>
             <TiltCard3D
-              key={project.id}
               maxTilt={8}
               perspective={1000}
               glowColor={project.isAiIdea ? 'var(--accent-magenta)' : 'var(--accent-cyan)'}
@@ -408,6 +412,7 @@ export const SelectedWorks: React.FC<SelectedWorksProps> = ({ portfolio }) => {
                 </div>
               </div>
             </TiltCard3D>
+            </div>
           ))}
         </div>
       </div>

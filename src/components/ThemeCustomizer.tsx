@@ -32,6 +32,7 @@ export const ThemeCustomizer: React.FC = () => {
               <button
                 key={preset.id}
                 type="button"
+                className="theme-chip"
                 onClick={() => applyThemePreset(preset.id)}
                 style={{
                   background: isSelected ? 'rgba(0, 242, 254, 0.08)' : 'rgba(255, 255, 255, 0.03)',

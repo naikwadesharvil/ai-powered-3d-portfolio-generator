@@ -2,6 +2,7 @@ import React from 'react';
 import { BookOpen, ShieldCheck, Trophy, Terminal, ExternalLink } from 'lucide-react';
 import type { PortfolioData } from '../types/portfolio';
 import { sanitizeUrl } from '../utils/sanitize';
+import { useReveal } from '../hooks/useReveal';
 
 interface CertificationsPublicationsProps {
   portfolio: PortfolioData;
@@ -10,6 +11,7 @@ interface CertificationsPublicationsProps {
 export const CertificationsPublications: React.FC<CertificationsPublicationsProps> = ({
   portfolio,
 }) => {
+  const sectionRef = useReveal<HTMLElement>();
   const hasPublications =
     portfolio.sectionVisibility.publications && portfolio.publications.length > 0;
   const hasCertifications =
@@ -20,6 +22,7 @@ export const CertificationsPublications: React.FC<CertificationsPublicationsProp
   return (
     <section
       id="credentials"
+      ref={sectionRef}
       style={{
         position: 'relative',
         width: '100%',
@@ -37,7 +40,7 @@ export const CertificationsPublications: React.FC<CertificationsPublicationsProp
         }}
       >
         {/* Section Header */}
-        <div style={{ marginBottom: '56px', textAlign: 'left' }}>
+        <div className="reveal reveal-up" style={{ marginBottom: '56px', textAlign: 'left' }}>
           <div className="badge-neon" style={{ marginBottom: '14px' }}>
             <Terminal size={14} />
             <span>CREDENTIALS // ACADEMIC & PROFESSIONAL RECOGNITION</span>
@@ -66,7 +69,7 @@ export const CertificationsPublications: React.FC<CertificationsPublicationsProp
         >
           {/* Research & Publications Column */}
           {hasPublications && (
-            <div>
+            <div className="reveal reveal-up stagger-1">
               <div
                 style={{
                   display: 'flex',
@@ -84,10 +87,10 @@ export const CertificationsPublications: React.FC<CertificationsPublicationsProp
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                {portfolio.publications.map((pub) => (
+                {portfolio.publications.map((pub, pIdx) => (
                   <div
                     key={pub.id}
-                    className="glass-panel"
+                    className={`glass-panel reveal reveal-up stagger-${(pIdx % 6) + 1}`}
                     style={{
                       padding: '28px',
                       borderLeft: pub.award
@@ -163,7 +166,7 @@ export const CertificationsPublications: React.FC<CertificationsPublicationsProp
 
           {/* Certifications Column */}
           {hasCertifications && (
-            <div>
+            <div className="reveal reveal-up stagger-2">
               <div
                 style={{
                   display: 'flex',
@@ -181,10 +184,10 @@ export const CertificationsPublications: React.FC<CertificationsPublicationsProp
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                {portfolio.certifications.map((cert) => (
+                {portfolio.certifications.map((cert, cIdx) => (
                   <div
                     key={cert.id}
-                    className="glass-panel"
+                    className={`glass-panel reveal reveal-up stagger-${(cIdx % 6) + 1}`}
                     style={{
                       padding: '24px',
                       display: 'flex',

@@ -154,6 +154,7 @@ export const Hero3D: React.FC<Hero3DProps> = ({ portfolio, onOpenStudio, isPubli
         {/* Main Pitch Headline */}
         <h1
           data-testid="hero-headline"
+          className="hero-enter-1"
           style={{
             fontFamily: 'var(--font-heading, "Space Grotesk", sans-serif)',
             fontSize: 'clamp(2rem, 4.8vw, 3.4rem)',
@@ -174,6 +175,7 @@ export const Hero3D: React.FC<Hero3DProps> = ({ portfolio, onOpenStudio, isPubli
         {/* One-Line Subtitle */}
         <p
           data-testid="hero-subtitle"
+          className="hero-enter-2"
           style={{
             fontFamily: 'var(--font-body, "Inter", sans-serif)',
             fontSize: 'clamp(0.95rem, 1.8vw, 1.15rem)',
@@ -189,6 +191,7 @@ export const Hero3D: React.FC<Hero3DProps> = ({ portfolio, onOpenStudio, isPubli
         {/* 3-Step Strip: Enter details, Generate, Share your 3D portfolio */}
         <div
           data-testid="hero-steps-strip"
+          className="hero-enter-3"
           style={{
             display: 'inline-flex',
             alignItems: 'center',
@@ -221,7 +224,7 @@ export const Hero3D: React.FC<Hero3DProps> = ({ portfolio, onOpenStudio, isPubli
         </div>
 
         {/* Prominent "Create My Portfolio" Button */}
-        <div>
+        <div className="hero-enter-3">
           <button
             id="hero-create-portfolio-btn"
             data-testid="hero-create-portfolio-btn"
@@ -287,6 +290,7 @@ export const Hero3D: React.FC<Hero3DProps> = ({ portfolio, onOpenStudio, isPubli
 
       {/* Hero Foreground Content Layer (Role, Name, View Works, About) */}
       <div
+        className="hero-enter-4"
         style={{
           position: 'relative',
           zIndex: 20,

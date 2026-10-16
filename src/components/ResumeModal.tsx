@@ -24,6 +24,7 @@ import {
   type ResumeRenderOptions,
 } from '../services/resumeGenerator';
 import { usePortfolioStore } from '../store/portfolioStore';
+import { triggerSuccessToast } from './SuccessToast';
 
 interface ResumeModalProps {
   portfolio: PortfolioData;
@@ -144,6 +145,7 @@ export const ResumeModal: React.FC<ResumeModalProps> = ({ portfolio: initialPort
       const res = await downloadResumePdf(activePortfolio, renderOptions);
       if (res.success) {
         setStatusMessage('PDF downloaded successfully!');
+        triggerSuccessToast('ATS Resume PDF Downloaded Successfully!');
       } else {
         setStatusMessage('Error downloading PDF.');
       }
@@ -169,6 +171,7 @@ export const ResumeModal: React.FC<ResumeModalProps> = ({ portfolio: initialPort
       const res = await downloadResumeDocx(activePortfolio, renderOptions);
       if (res.success) {
         setStatusMessage('Word document downloaded successfully!');
+        triggerSuccessToast('ATS Resume Word (.docx) Downloaded Successfully!');
       } else {
         setStatusMessage('Error generating Word document.');
       }
@@ -186,6 +189,7 @@ export const ResumeModal: React.FC<ResumeModalProps> = ({ portfolio: initialPort
     if (success) {
       setCopiedText(true);
       setStatusMessage('Plaintext ATS resume copied to clipboard!');
+      triggerSuccessToast('Plaintext Resume Copied to Clipboard!');
       setTimeout(() => setCopiedText(false), 2500);
       setTimeout(() => setStatusMessage(null), 3000);
     }
