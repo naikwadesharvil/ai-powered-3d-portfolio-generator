@@ -4,11 +4,11 @@
  * All developer details are kept here in one place for easy updating.
  */
 export const DEVELOPER = {
-  name: "Sharvil K. Naikwade",
+  name: "Sharvil K.N",
   role: "Developer of this website",
   github: "https://github.com/naikwadesharvil",
   linkedin: "https://www.linkedin.com/in/sharvil-naikwade-2294ab2bb/",
-  phone: "+91 XXXXXXXXXX", // <-- Replace with your real number
+  phone: "+91 7709159322", // <-- Replace with your real number
 } as const;
 
 export const DEVELOPER_CONFIG = DEVELOPER;
