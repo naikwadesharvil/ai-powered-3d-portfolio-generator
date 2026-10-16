@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Sparkles, Sliders } from 'lucide-react';
+import { Sparkles, Sliders, Phone } from 'lucide-react';
+import { GithubIcon, LinkedinIcon } from './components/Icons';
+import { DEVELOPER, getDeveloperTelLink } from './config/developer';
 import type { PortfolioData, UserRole } from './types/portfolio';
 import { normalizePortfolioData } from './types/portfolioSchema';
 import { ROLE_PROFILES } from './data/defaultProfiles';
@@ -531,8 +533,188 @@ export function App() {
           })()}
         </main>
 
+        {/* Site Developer Contact Card (Landing Page Only - Visible without opening/scrolling Studio) */}
+        {!isSlugRoute && (
+          <aside
+            id="site-developer-card"
+            className="site-developer-credit"
+            data-developer-credit="true"
+            aria-label="Website Developer Information"
+            style={{
+              maxWidth: '1280px',
+              margin: '0 auto 40px',
+              padding: '0 24px',
+              position: 'relative',
+              zIndex: 10,
+            }}
+          >
+            <div
+              style={{
+                background: 'rgba(5, 7, 12, 0.75)',
+                border: '1px solid rgba(0, 242, 254, 0.25)',
+                borderRadius: '16px',
+                padding: '24px 28px',
+                display: 'flex',
+                flexWrap: 'wrap',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '20px',
+                backdropFilter: 'blur(12px)',
+                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.5), 0 0 20px rgba(0, 242, 254, 0.08)',
+              }}
+            >
+              <div>
+                <div
+                  style={{
+                    display: 'inline-block',
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '0.68rem',
+                    letterSpacing: '0.12em',
+                    color: 'var(--accent-cyan)',
+                    marginBottom: '6px',
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  Site Developer // Contact
+                </div>
+                <h3
+                  style={{
+                    fontFamily: 'var(--font-heading)',
+                    fontSize: '1.2rem',
+                    fontWeight: 700,
+                    color: '#ffffff',
+                    margin: 0,
+                  }}
+                >
+                  {DEVELOPER.name}
+                </h3>
+                <p
+                  style={{
+                    fontFamily: 'var(--font-body)',
+                    fontSize: '0.85rem',
+                    color: 'var(--text-secondary)',
+                    margin: '4px 0 0 0',
+                  }}
+                >
+                  {DEVELOPER.role}
+                </p>
+              </div>
+
+              <div
+                style={{
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  alignItems: 'center',
+                  gap: '12px',
+                }}
+              >
+                <a
+                  href={DEVELOPER.linkedin}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={`Visit ${DEVELOPER.name} on LinkedIn (opens in new tab)`}
+                  tabIndex={0}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '10px 16px',
+                    borderRadius: '8px',
+                    background: 'rgba(255, 255, 255, 0.06)',
+                    border: '1px solid rgba(0, 242, 254, 0.3)',
+                    color: '#ffffff',
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '0.78rem',
+                    fontWeight: 600,
+                    textDecoration: 'none',
+                    transition: 'all 0.2s ease',
+                    cursor: 'pointer',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = 'var(--accent-cyan)';
+                    e.currentTarget.style.background = 'rgba(0, 242, 254, 0.12)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor = 'rgba(0, 242, 254, 0.3)';
+                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.06)';
+                  }}
+                >
+                  <LinkedinIcon size={15} />
+                  <span>LinkedIn</span>
+                </a>
+
+                <a
+                  href={DEVELOPER.github}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={`Visit ${DEVELOPER.name} on GitHub (opens in new tab)`}
+                  tabIndex={0}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '10px 16px',
+                    borderRadius: '8px',
+                    background: 'rgba(255, 255, 255, 0.06)',
+                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                    color: '#ffffff',
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '0.78rem',
+                    fontWeight: 600,
+                    textDecoration: 'none',
+                    transition: 'all 0.2s ease',
+                    cursor: 'pointer',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = 'var(--accent-cyan)';
+                    e.currentTarget.style.background = 'rgba(0, 242, 254, 0.12)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.06)';
+                  }}
+                >
+                  <GithubIcon size={15} />
+                  <span>GitHub</span>
+                </a>
+
+                <a
+                  href={getDeveloperTelLink()}
+                  aria-label={`Call developer ${DEVELOPER.name} at ${DEVELOPER.phone}`}
+                  tabIndex={0}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '10px 16px',
+                    borderRadius: '8px',
+                    background: 'rgba(0, 242, 254, 0.12)',
+                    border: '1px solid var(--accent-cyan)',
+                    color: 'var(--accent-cyan)',
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '0.78rem',
+                    fontWeight: 700,
+                    textDecoration: 'none',
+                    transition: 'all 0.2s ease',
+                    cursor: 'pointer',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = 'rgba(0, 242, 254, 0.22)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'rgba(0, 242, 254, 0.12)';
+                  }}
+                >
+                  <Phone size={15} />
+                  <span>Call {DEVELOPER.phone}</span>
+                </a>
+              </div>
+            </div>
+          </aside>
+        )}
+
         {/* Section 8: Interactive Footer */}
-        <Footer portfolio={activePortfolio} />
+        <Footer portfolio={activePortfolio} isPublicPage={isSlugRoute} />
       </div>
 
       {!isSlugRoute && isStudioOpen && StudioComponent && (

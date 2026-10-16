@@ -1,17 +1,19 @@
 import React from 'react';
-import { ArrowUp, ArrowRight } from 'lucide-react';
+import { ArrowUp, ArrowRight, Phone } from 'lucide-react';
 import { GithubIcon, LinkedinIcon, TwitterIcon } from './Icons';
 import type { PortfolioData } from '../types/portfolio';
 import { sanitizeUrl } from '../utils/sanitize';
 import { useReveal } from '../hooks/useReveal';
+import { DEVELOPER, getDeveloperTelLink } from '../config/developer';
 
 interface FooterProps {
   portfolio: PortfolioData;
+  isPublicPage?: boolean;
 }
 
 const CURRENT_YEAR = new Date().getFullYear();
 
-export const Footer: React.FC<FooterProps> = ({ portfolio }) => {
+export const Footer: React.FC<FooterProps> = ({ portfolio, isPublicPage = false }) => {
   const footerRef = useReveal<HTMLElement>();
 
   const scrollToTop = () => {
@@ -261,6 +263,202 @@ export const Footer: React.FC<FooterProps> = ({ portfolio }) => {
             </div>
           </div>
         </div>
+
+        {/* Developer Credit Block (Main Site: Full block with 3 buttons; Published: Small attribution line only) */}
+        {!isPublicPage ? (
+          <div
+            className="site-developer-credit"
+            data-developer-credit="true"
+            style={{
+              padding: '20px 24px',
+              marginBottom: '32px',
+              borderRadius: '12px',
+              background: 'rgba(5, 7, 12, 0.75)',
+              border: '1px solid rgba(0, 242, 254, 0.25)',
+              display: 'flex',
+              flexWrap: 'wrap',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '16px',
+            }}
+          >
+            <div style={{ minWidth: '220px' }}>
+              <div
+                style={{
+                  fontFamily: 'var(--font-heading)',
+                  fontSize: '0.95rem',
+                  fontWeight: 700,
+                  color: '#ffffff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: '8px',
+                }}
+              >
+                <span>Developed by {DEVELOPER.name}</span>
+                <span
+                  style={{
+                    fontSize: '0.68rem',
+                    fontFamily: 'var(--font-mono)',
+                    padding: '2px 8px',
+                    borderRadius: '4px',
+                    background: 'rgba(0, 242, 254, 0.12)',
+                    color: 'var(--accent-cyan)',
+                    border: '1px solid rgba(0, 242, 254, 0.3)',
+                    letterSpacing: '0.04em',
+                  }}
+                >
+                  {DEVELOPER.role}
+                </span>
+              </div>
+              <p
+                style={{
+                  fontFamily: 'var(--font-body)',
+                  fontSize: '0.78rem',
+                  color: 'var(--text-secondary)',
+                  marginTop: '4px',
+                }}
+              >
+                Creator & Site Architect // AI-Powered 3D Portfolio Generator
+              </p>
+            </div>
+
+            <div
+              style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                alignItems: 'center',
+                gap: '10px',
+              }}
+            >
+              <a
+                href={DEVELOPER.linkedin}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={`Visit ${DEVELOPER.name}'s LinkedIn profile (opens in new tab)`}
+                tabIndex={0}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '8px 14px',
+                  borderRadius: '6px',
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  border: '1px solid rgba(0, 242, 254, 0.3)',
+                  color: '#ffffff',
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '0.75rem',
+                  textDecoration: 'none',
+                  transition: 'all 0.2s ease',
+                  cursor: 'pointer',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = 'var(--accent-cyan)';
+                  e.currentTarget.style.background = 'rgba(0, 242, 254, 0.12)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = 'rgba(0, 242, 254, 0.3)';
+                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
+                }}
+              >
+                <LinkedinIcon size={14} />
+                <span>LinkedIn</span>
+              </a>
+
+              <a
+                href={DEVELOPER.github}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={`Visit ${DEVELOPER.name}'s GitHub profile (opens in new tab)`}
+                tabIndex={0}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '8px 14px',
+                  borderRadius: '6px',
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  border: '1px solid rgba(255, 255, 255, 0.2)',
+                  color: '#ffffff',
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '0.75rem',
+                  textDecoration: 'none',
+                  transition: 'all 0.2s ease',
+                  cursor: 'pointer',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = 'var(--accent-cyan)';
+                  e.currentTarget.style.background = 'rgba(0, 242, 254, 0.12)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
+                }}
+              >
+                <GithubIcon size={14} />
+                <span>GitHub</span>
+              </a>
+
+              <a
+                href={getDeveloperTelLink()}
+                aria-label={`Call developer ${DEVELOPER.name} at ${DEVELOPER.phone}`}
+                tabIndex={0}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '8px 14px',
+                  borderRadius: '6px',
+                  background: 'rgba(0, 242, 254, 0.12)',
+                  border: '1px solid var(--accent-cyan)',
+                  color: 'var(--accent-cyan)',
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '0.75rem',
+                  fontWeight: 600,
+                  textDecoration: 'none',
+                  transition: 'all 0.2s ease',
+                  cursor: 'pointer',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'rgba(0, 242, 254, 0.22)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'rgba(0, 242, 254, 0.12)';
+                }}
+              >
+                <Phone size={14} />
+                <span>Call: {DEVELOPER.phone}</span>
+              </a>
+            </div>
+          </div>
+        ) : (
+          <div
+            className="site-developer-credit"
+            data-developer-credit="true"
+            style={{
+              padding: '12px 0 20px',
+              fontFamily: 'var(--font-mono)',
+              fontSize: '0.75rem',
+              color: 'var(--text-secondary)',
+            }}
+          >
+            Built with AI 3D Portfolio Generator by{' '}
+            <a
+              href={DEVELOPER.linkedin}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={`Visit developer ${DEVELOPER.name}'s LinkedIn profile (opens in new tab)`}
+              tabIndex={0}
+              style={{
+                color: 'var(--accent-cyan)',
+                textDecoration: 'underline',
+                fontWeight: 600,
+              }}
+            >
+              {DEVELOPER.name}
+            </a>
+          </div>
+        )}
 
         {/* Bottom Bar: Copyright & Back to Top */}
         <div
